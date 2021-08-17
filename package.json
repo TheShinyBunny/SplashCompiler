@@ -12,6 +12,9 @@
     "splash",
     "compiler"
   ],
+  "repository": {
+    "url": "git://github.com/YanivBasmach/SplashCompiler.git"
+  },
   "author": "YanivBasmach",
   "license": "MIT",
   "devDependencies": {
@@ -22,9 +25,5 @@
     "@types/prompt-sync": "^4.1.1",
     "fs": "0.0.1-security",
     "prompt-sync": "^4.2.0"
-  },
-  "publishConfig": {
-    "registry":"https://npm.pkg.github.com",
-    "access": "restricted"
   }
 }
