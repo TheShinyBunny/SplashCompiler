@@ -1,0 +1,23 @@
+
+const server = HTTPServer()
+var counter = 0
+
+main {
+    server.get('/') {
+        return "Home"
+    }
+    server.patch('/increment') {
+        counter++
+        return counter
+    }
+
+    server.get('/current') {
+        return "Current value: {counter}"
+    }
+
+    server.post('/set/<value>') {(value)
+        counter = value
+        return OK
+    }
+
+}

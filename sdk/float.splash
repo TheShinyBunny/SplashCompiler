@@ -1,0 +1,23 @@
+native class float {
+    native static float parse(string value)
+
+    native operator float add(int | float other)
+
+    native operator float sub(int | float other)
+
+    native operator float mul(int | float other)
+
+    native operator float div(int | float other)
+
+    native operator int int_div(int | float other)
+
+    native operator float mod(int | float divisor)
+
+    native operator float pow(int | float other)
+    
+    operator int compare(int | float other) {
+        return this - other
+    }
+
+    native operator float negative()
+}

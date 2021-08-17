@@ -1,0 +1,76 @@
+
+
+main {
+    displayMenu()
+    var action = readInt()
+
+    while (action == 1) {
+        var source = readInt("Enter the source number: ")
+        continue if (source < 0) {
+            print("The number must be positive!")
+        }
+
+        var sourceBase = readInt("Enter the source base: ")
+        continue if (sourceBase !in 2..10) {
+            print("The source base must be between 2 and 10!")
+        } else if (source.isValidForBase(base)) {
+            print("The number {source} is invalid in base {base}")
+        }
+
+        var destBase = readInt("Enter the destination base: ")
+        continue if (destBase !in 2..10) {
+            print("The destination base must be between 2 and 10!")
+        }
+
+        var result = convertBase(source, sourceBase, destBase)
+
+        displayMenu()
+        action = readInt()
+    }
+}
+
+function displayMenu() {
+    print("========================
+           Base Calculator menu:
+           *********************
+           Enter 1 to perform a calculation
+           Enter 0 to exit
+           ========================")
+}
+
+function int convertBase(int source, int sourceBase, int destBase) {
+    var result = source
+
+    if (sourceBase != 10) {
+        result = convertBases(source, 10)
+    }
+
+    if (destBase != 10) {
+        result = convertBases(result, destBase)
+    }
+
+    return result
+}
+
+function int convertBases(int source, int sourceBase, int destBase) {
+    var res = 0
+    var factor = 1
+
+    while (source > 0) {
+        var rem = source % destBase
+        res += rem * factor
+        source /= destBase
+        factor *= sourceBase
+    }
+
+    return res
+}
+
+extension function boolean isValidForBase(this int value, int base) {
+    while (value > 0) {
+        return false if (num % 10 >= base)
+        num /= 10
+    }
+
+    return true
+}

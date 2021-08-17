@@ -1,0 +1,171 @@
+import splash.ui
+
+main {
+    window = ShapesWindow()
+    window.open()
+}
+
+record LocationFields(int index) {
+    NumberField x = new NumberField("Location {index} x: ") {
+        minValue = 0
+        default = 0
+        format = INT
+    }
+    NumberField y = new NumberField("Location {index} y: ") {
+        minValue = 0
+        default = 0
+        format = INT
+    }
+
+    enable() {
+        x.enable()
+        y.enable()
+    }
+
+    disable() {
+        x.disable(true) // true will also reset the field
+        y.disable(true)
+    }
+
+    Location toLocation() {
+        return {x: x.value, y: y.value}
+    }
+}
+
+class ShapesWindow extends Window {
+
+    static Color[] COLOR_LIST = [WHITE, RED, GREEN, BLUE, YELLOW, ORANGE, BROWN, BLACK]
+    
+    AppState state
+    Panel controlsPanel
+    Panel drawingBoard
+    LocationFields[] locationFields
+    NumberField widthField
+    NumberField heightField
+    Shape{} shapes
+    boolean isDirty = true
+    string projectName
+
+    constructor() {
+        title = "Shapes"
+        onClose = EXIT
+        width = 500
+        height = 400
+        centerOnScreen()
+        state = loadState("state")
+        
+        controlsPanel = Panel()
+        drawingBoard = Panel()
+
+        var shapeTypeSelect = SelectMenu("Shape Type",ShapeType.values) {
+            label(ShapeType type) {
+                return type.name.toUpperCamelCase()
+            }
+            changed(ShapeType val) {
+                switch (val) {
+                    locationFields[].enable()
+                    widthField.disable()
+                    heightField.disable()
+                    case "Rectangle" {
+                        locationFields[1..2].disable()
+                        widthField.enable()
+                        heightField.enable()
+                    }
+                    case "Ellipse" {
+                        locationFields[1].y.disable()
+                        locationFields[2].disable()
+                        widthField.enable()
+                    }
+                    case "Line" {
+                        locationFields[2].disable()
+                    }
+                }
+            }
+        }
+
+        controlsPanel.add(shapeTypeSelect)
+
+        locationFields = repeat(3,(i)=>LocationFields(i + 1))
+        controlsPanel.addAll(locationFields.flatmap(l=>[l.x,l.y]))
+        
+        var colorField = SelectMenu("Color",COLOR_LIST)
+
+        controlsPanel.add(colorField)
+
+        var nameField = TextField("Name: ")
+
+        var createButton = Button("Create Shape") {
+            addShape(shapeTypeSelect.value, locationFields[].toLocation(), widthField.value, heightField.value, nameField.value)
+        }
+
+        addPanel(controlsPanel, LEFT)
+        addPanel(drawingBoard, RIGHT)
+        
+        var fileMenu = Menu()
+        fileMenu.add("New",Keybind.ctrl("n")) {
+            if (!checkSaved()) return
+            drawingBoard.clear()
+            shapes.clear()
+
+            projectName = null
+        }
+        fileMenu.add("Save",Keybind.ctrl("s")) {
+            saveProject()
+        }
+        fileMenu.add("Open",Keybind.ctrl("o")) {
+            if (!checkSaved()) return
+            var file = openFileChooser("Open a project",this.state.projects_dir || SystemPaths.documents) {
+                multiple = false
+                extensions = ["pic"]
+                directories = false
+            }
+
+            this.projectName = file.fullName
+            var reader = FileObjectReader(file)
+            shapes = reader.readObject()    
+        }
+        fileMenu.add("Exit",Keybind.alt("f4")) {
+            checkSaved()
+            this.close()
+        }
+
+    }
+
+    createShape(ShapeType type, Location[] locs, int width, int height, string name) {
+        Shape shape = type.factory(locs,width,height)
+        shapes[name] = shape
+        drawingBoard.addDrawable(shape)
+
+        isDirty = true
+    }
+
+    saveProject(){
+        if (!projectName) {
+            var path = openFilePathChooser("Save as...","myshapes.pic") {
+                allowExisting = true
+            }
+            if (path) {
+                this.state.projects_dir = path
+                projectName = path.fullName
+            } else return
+        }
+        var writer = FileObjectWriter(projectName)
+        writer.writeObject(shapes)
+        writer.save()
+
+        isDirty = false
+    }
+
+    boolean checkSaved() {
+        if (isDirty) {
+            var selection = openDialog("The current project was not saved","Save it now?",YES_NO_CANCEL)
+            if (selection == SAVE) {
+                saveProject()
+            } else if (selection == CANCEL) {
+                return false
+            }
+        }
+        return true
+    }
+
+}

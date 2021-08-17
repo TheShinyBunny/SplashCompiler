@@ -1,0 +1,33 @@
+abstract class Shape implements Drawable {
+    Color color
+    Location firstLocation
+
+    constructor(this.firstLocation)
+
+    abstract draw(Canvas cvs)
+
+    abstract move(Location dest)
+
+    abstract scale(@validate(x > 0) float factor)
+}
+
+class Rectangle extends Shape {
+    int width
+    int height
+
+    constructor(super.firstLocation, this.width, this.height)
+
+    draw(Canvas cvs) {
+        cvs.color = this.color
+        cvs.drawRect(firstLocation.x, firstLocation.y, width, height)
+    }
+
+    move(Location dest) {
+        firstLocation = dest
+    }
+
+    scale(float factor) {
+        width *= factor
+        height *= factor
+    }
+}

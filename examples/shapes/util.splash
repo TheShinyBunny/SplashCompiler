@@ -1,0 +1,14 @@
+enum ShapeType {
+    RECTANGLE((locs,w,h)=>Rectangle(locs[0],w,h))
+    ELLIPSE((locs,w,h)=>Ellipse(locs[0],locs[1],w))
+    LINE((locs,w,h)=>Line(locs[0],locs[1]))
+    TRIANGLE((locs,w,h)=>Triangle(locs[0],locs[1],locs[2]))
+
+    Function<Location[],int,int,Shape> factory
+    constructor(this.factory)
+}
+
+interface Location {
+    int x
+    int y
+}

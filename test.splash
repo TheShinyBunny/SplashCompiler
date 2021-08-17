@@ -1,0 +1,59 @@
+
+main {
+    var name = "Yaniv"#readLine("What is your name? ")
+    var age = 19#readInt("And your age? ")
+
+    if (age < 18) {
+        print("You are katin")
+    } else if (age == 19) {
+        print("You are 19, that's cool")
+    } else {
+        print("Damn your'e old!")
+    }
+
+    print(5 + 1.4 * 2)
+    print(10 * 1.2)
+    print(5 / 2)
+    print(5 // 2)
+    print(4 ** 2 + 1)
+    print(0.1 + 0.2)
+    print("-" * 20)
+
+    var p = Person(name, age)
+
+    print("Hello {p.name}! This is Splash.")
+    p.sayHi()
+    p.sayHi("Someone")
+    print(p)
+    
+    var arr = [5]
+    arr.add(8)
+    arr.add(12)
+
+    print("{arr.join(" and ")}. elem at 1: {arr[1]}")
+    arr.pop()
+    print(arr)
+    print("Empty? {arr.isEmpty}")
+    arr.clear()
+    print("{arr} of size {arr.length} is empty? {arr.isEmpty}")
+
+}
+
+class Person {
+    string name
+    int age
+
+    constructor(this.name, this.age = 10)
+
+    sayHi() {
+        print("{name} says hi, he's {age} years old")
+    }
+
+    sayHi(string to) {
+        print("{name} says hi to {to}")
+    }
+
+    toString() {
+        return "{name} ({age})"
+    }
+}

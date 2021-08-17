@@ -1,0 +1,30 @@
+
+
+native function print(object msg)
+
+native function string readLine(string? msg)
+
+function int readInt(string? msg) {
+    return int.parse(readLine(msg))
+}
+
+native class object {
+
+    native operator int compare(this other)
+
+    operator string add(string str) {
+        return "{this}{str}"
+    }
+
+    native string toString()
+
+}
+
+native class boolean {
+    
+    native operator boolean not()
+
+    native operator boolean and(boolean other)
+    native operator boolean or(boolean other)
+
+}

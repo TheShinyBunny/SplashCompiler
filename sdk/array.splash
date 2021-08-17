@@ -1,0 +1,90 @@
+
+native class array<T> {
+
+    native string toString()
+
+    native get indexer T(int index)
+
+    native add(T value)
+
+    native add(int index, T value)
+
+    native T remove(int index)
+
+    native get int length()
+
+    native clear()
+
+    get boolean isEmpty() {
+        return length == 0
+    }
+
+    T pop() {
+        return remove(length - 1)
+    }
+
+    T shift() {
+        return remove(0)
+    }
+
+    unshift(T value) {
+        add(0, value)
+    }
+
+    iterator T[]() {
+        return this
+    }
+
+    string join(string separator) {
+        var str = ""
+        for (var item : this) {
+            str += item.toString() + separator
+        }
+        if (!str.isEmpty) {
+            str -= separator.length
+        }
+        return str
+    }
+
+    /*
+
+    N[] map<N>(function(T): N mapper) {
+        var newArr = []<N>
+        for (var item : this) {
+            newArr.add(mapper(val))
+        }
+        return newArr
+    }
+
+    get indexer T[](Range<int> range) {
+        var newArr = []<T>
+        for (var i : range) {
+            newArr.add(this[i])
+        }
+        return newArr
+    }
+
+    T? find(function(T): boolean filter) {
+        for (var item : this) {
+            if (filter(item)) return item
+        }
+    }
+    
+
+    int? findIndex(function(T): boolean filter) {
+        for (var i : 0..length) {
+            var item = this[i]
+            if (filter(item)) return i
+        }
+    }
+
+    R reduce<R>(function(R, T): R reducer, R initial) {
+        var result = initial
+        for (var item : this) {
+            result = reducer(result, item)
+        }
+        return result
+    }
+    */
+    
+}

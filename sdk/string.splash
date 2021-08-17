@@ -1,0 +1,79 @@
+
+native class string {
+    native string toLowerCase()
+
+    native string toUpperCase()
+
+    native string[] chars()
+
+    native operator string sub(int chars)
+
+    get indexer string(int index) {
+        return chars()[index]
+    }
+
+    get int length() {
+        return chars().length
+    }
+
+    get boolean isEmpty() {
+        return length == 0
+    }
+
+    operator string mul(int times) {
+        var res = ""
+        repeat (times) {
+            res += this
+        }
+        return res
+    }
+
+    /*
+    int? indexOf(string substr) {
+        if (substr.isEmpty) return -1
+        var strIndex = 0
+        var start = -1
+        for (var i : 0..length) {
+            var c = this[i]
+            if (c == substr[strIndex]) {
+                if (start < 0) {
+                    start = i
+                }
+                strIndex++
+            } else if (strIndex == substr.length) {
+                return start
+            } else {
+                strIndex = 0
+            }
+        }
+        if (strIndex == substr.length) {
+            return start
+        } else {
+            return -1
+        }
+    }
+
+    boolean contains(string substr) {
+        return indexOf(substr)
+    }
+
+    string substring(int startIndex, int? endIndex) {
+
+    }
+
+    boolean startsWith(string str) {
+
+    }
+
+    boolean endsWith(string str) {
+
+    }
+
+    int? lastIndexOf(string substr) {
+
+    }
+    
+    native get indexer string(Range<int> range)
+    */
+    
+}
