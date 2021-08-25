@@ -1,4 +1,6 @@
+import { Diagnostic, DiagnosticType } from ".";
 import { ElseStatement, NullExpression, ArrayExpression, AssignableExpression, Assignment, BinaryExpression, CallAccess, CallStatement, CodeBlock, Expression, FieldAccess, IfStatement, InvalidExpression, LiteralExpression, MainBlock, RootNode, Statement, UnaryExpression, VarDeclaration, VariableAccess, ModifierList, ParameterNode, FunctionNode, ReturnStatement, ExpressionList, StringExpression, ClassDeclaration, ClassMember, MethodNode, FieldNode, ConstructorParamNode, ConstructorNode, ThisAccess, ASTNode, IndexAccess, TypeParameterNode, RepeatStatement, ForStatement } from "./ast";
+import { Completion, CompletionType, PartialCompletion, TextLocation } from "./env";
 import { BasicTypeToken, ComboTypeToken, FunctionTypeToken, SingleTypeToken, TypeToken } from "./oop";
 import { AssignmentOperator, BinaryOperator, Modifier } from "./operators";
 import { DelegateTokenizer, ExpressionSegment, LiteralSegment, Position, StringToken, TextRange, Token, Tokenizer, TokenType } from "./tokenizer";
@@ -7,19 +9,31 @@ export class Parser {
 
     lookforward: Token[] = []
     lastToken: Token
-    hasErrors = false
+    diagnostics: Diagnostic[] = []
+    cursor?: Position
+    completionItems: Completion[] = []
 
     constructor(public file: string, public tokenizer: Tokenizer) {
         this.lastToken = Token.EOF;
     }
 
     error(token: Token, msg: string) {
-        this.errorRange(token.range, msg + ', found ' + token.value)
+        this.errorRange(token.range, msg)
     }
 
     errorRange(range: TextRange, msg: string) {
         console.trace('Compilation error at ' + TextRange.toString(range) + ': ' + msg)
-        this.hasErrors = true
+        this.diagnostics.push({file: this.file, range, message: msg, type: DiagnosticType.error})
+    }
+
+    suggest(range: TextRange, items: ()=>PartialCompletion[]) {
+        if (this.cursor && TextRange.contains(range, this.cursor)) {
+            this.completionItems.push(...items().map(c=>({range, ...c})))
+        }
+    }
+
+    suggestHere(type: CompletionType, ...items: string[]) {
+        this.suggest(this.peek().range, ()=>items.map(s=>({value: s, type})))
     }
 
     /**
@@ -59,6 +73,10 @@ export class Parser {
         if (this.lastToken.isValid()) {
             this.lookforward.unshift(this.lastToken)
         }
+    }
+
+    location(range: TextRange): TextLocation {
+        return {range, file: this.file}
     }
     
     startRange(): RangeBuilder {
@@ -121,7 +139,10 @@ export class Parser {
      * If it doesn't, raise an error
      * @param val The value we expect
      */
-    expectValue(val: string): Token | undefined {
+    expectValue(val: string, suggest?: CompletionType): Token | undefined {
+        if (suggest) {
+            this.suggestHere(suggest,val)
+        }
         if (this.isValueNext(val)) {
             return this.next();
         }
@@ -158,28 +179,39 @@ export class Parser {
     parseFile(): RootNode {
         let root = new RootNode(this.file)
 
+        let comment: string | undefined = undefined
         while (this.hasNext()) {
-            if (this.isNext(TokenType.line_end)) {
-                this.next()
+            if (this.peek(0,false).type == TokenType.line_end) {
+                this.next(false)
+            } else if (this.peek(0,false).type == TokenType.comment) {
+                comment = this.next(false).value
             } else {
-                let s = this.parseTopLevel(new ModifierList())
+                let s = this.parseTopLevel(new ModifierList(),comment)
                 if (s) {
                     root.add(s)
                     if (this.hasNext()) {
                         this.expect(TokenType.line_end)
                     }
                 } else {
+                    let range = this.startRange()
                     while (this.hasNext() && !this.isNext(TokenType.line_end)) {
                         this.next()
                     }
+                    this.errorRange(range.end(),'Invalid statement')
                 }
+                comment = undefined
             }
+        }
+
+        if (this.diagnostics.length > 0) {
+            root.valid = false
         }
 
         return root
     }
 
-    parseTopLevel(modifiers: ModifierList): ASTNode | undefined {
+    parseTopLevel(modifiers: ModifierList, comment?: string): ASTNode | undefined {
+        this.suggestHere(CompletionType.keyword,'var','main','function','class','private','abstract')
         if (this.isNext(TokenType.keyword)) {
             let kw = this.peek()
             switch (kw.value) {
@@ -198,10 +230,14 @@ export class Parser {
                 case 'native':
                 case 'abstract':
                     modifiers.add(this,kw)
-                    this.next()
-                    return this.parseTopLevel(modifiers)
+                    this.next(false)
+                    return this.parseTopLevel(modifiers,comment)
                 case 'function':
-                    return this.parseFunction(modifiers)
+                    let func = this.parseFunction(modifiers)
+                    if (func) {
+                        func.docs = comment
+                    }
+                    return func
                 case 'class':
                     return this.parseClass(modifiers)
             }
@@ -220,6 +256,7 @@ export class Parser {
                 } else if (this.isValueNext('}')) {
                     break
                 }
+                
                 let s = this.parseStatement()
                 if (s) {
                     block.statements.push(s)
@@ -227,9 +264,11 @@ export class Parser {
                         this.expect(TokenType.line_end)
                     }
                 } else {
+                    let range = this.startRange()
                     while (this.hasNext() && !this.isNext(TokenType.line_end)) {
                         this.next()
                     }
+                    this.errorRange(range.end(),'Invalid statement')
                 }
             }
 
@@ -242,14 +281,18 @@ export class Parser {
     parseClassBody(): ClassMember[] {
         let members: ClassMember[] = []
         if (this.skipValue('{')) {
+            let comment: string | undefined = undefined
             while (this.hasNext()) {
-                if (this.isNext(TokenType.line_end)) {
-                    this.next()
+                if (this.peek(0,false).type == TokenType.line_end) {
+                    this.next(false)
                     continue
-                } else if (this.isValueNext('}')) {
+                } else if (this.peek(0,false).value == '}') {
                     break
+                } else if (this.peek(0,false).type == TokenType.comment) {
+                    comment = this.next(false).value
+                    continue
                 }
-                let s = this.parseClassMember(new ModifierList())
+                let s = this.parseClassMember(new ModifierList(),comment)
                 if (s) {
                     members.push(s)
                     if (this.hasNext()) {
@@ -260,6 +303,7 @@ export class Parser {
                         this.next()
                     }
                 }
+                comment = undefined
             }
 
             this.expectValue('}')
@@ -267,19 +311,20 @@ export class Parser {
         return members
     }
 
-    parseClassMember(modifiers: ModifierList): ClassMember | undefined {
+    parseClassMember(modifiers: ModifierList, comment?: string): ClassMember | undefined {
         let t = this.peek()
         if (t.type == TokenType.keyword) {
             let keys = Object.keys(Modifier)
             if (keys.includes(t.value)) {
                 modifiers.add(this, t)
                 this.next()
-                return this.parseClassMember(modifiers)
+                return this.parseClassMember(modifiers,comment)
             }
         }
         if (t.value == 'constructor') {
-            this.next()
-            return this.parseConstructor(modifiers)
+            let ctor = this.parseConstructor(modifiers)
+            ctor.docs = comment
+            return ctor
         }
         let noName = modifiers.getOneOf(Modifier.indexer, Modifier.invoker, Modifier.iterator, Modifier.accessor, Modifier.assigner)
         let type: TypeToken | undefined
@@ -298,9 +343,13 @@ export class Parser {
         }
         if (!name) return
         if (this.isValueNext('(')) {
-            return this.parseMethod(modifiers, type, name)
+            let m = this.parseMethod(modifiers, type, name)
+            m.docs = comment
+            return m
         } else {
-            return this.parseField(modifiers, type, name)
+            let f = this.parseField(modifiers, type, name)
+            f.docs = comment
+            return f
         }
     }
 
@@ -330,14 +379,16 @@ export class Parser {
     }
 
     parseConstructor(modifiers: ModifierList) {
+        let label = this.next()
         modifiers.assertHasOnly(this,Modifier.private,Modifier.protected)
         modifiers.checkIncompatible(this,Modifier.private,Modifier.protected)
         let params = this.parseList(this.parseCtorParameter,'(',')')
         let body = this.parseBlock()
-        return new ConstructorNode(params,modifiers,body)
+        return new ConstructorNode(label.range,params,modifiers,body)
     }
 
     parseStatement(): Statement | undefined {
+        this.suggestHere(CompletionType.keyword,'var','if','return','repeat','for')
         if (this.isValueNext('var')) {
             return this.parseVarDecl()
         } else if (this.isValueNext('if')) {
@@ -370,6 +421,7 @@ export class Parser {
             if (then) {
                 let orElse: ElseStatement | undefined
                 this.skipEmptyLines()
+                this.suggestHere(CompletionType.keyword,'else')
                 if (this.isValueNext('else')) {
                     let l = this.next()
                     this.skipEmptyLines()
@@ -403,7 +455,7 @@ export class Parser {
 
     parseFor(): Statement | undefined {
         let label = this.next()
-        if (this.expectValue('(') && this.expectValue('var')) {
+        if (this.expectValue('(') && this.expectValue('var',CompletionType.keyword)) {
             let varname = this.expect(TokenType.identifier)
             if (varname) {
                 this.expectValue(':')
@@ -419,7 +471,7 @@ export class Parser {
 
     parseFunction(modifiers: ModifierList): FunctionNode | undefined {
         modifiers.assertHasOnly(this,Modifier.private,Modifier.native)
-        let label = this.next()
+        this.next()
         let retType: TypeToken = BasicTypeToken.void
         
         if (this.peek(1).value != '(') {
@@ -429,7 +481,7 @@ export class Parser {
         if (name && this.isValueNext('(')) {
             let params = this.parseList(this.parseParameter,'(',')')
             let code = this.parseBlock()
-            return new FunctionNode(label.range, modifiers, name, retType, params, code)
+            return new FunctionNode(this.location(name.range), modifiers, name, retType, params, code)
         }
     }
 
@@ -467,8 +519,9 @@ export class Parser {
 
     parseTypeParam(): TypeParameterNode | undefined {
         let base = this.expect(TokenType.identifier)
-            if (base) {
+        if (base) {
             let extend: TypeToken | undefined
+            this.suggestHere(CompletionType.keyword,'extends')
             if (this.skipValue('extends')) {
                 extend = this.parseTypeToken(false)
             }
@@ -539,6 +592,7 @@ export class Parser {
             tok = this.parseTypeToken(false)
             this.expectValue(')')
         }
+        this.suggestHere(CompletionType.keyword,'function')
         if (this.skipValue('function')) {
             let params = this.parseList(this.parseTypeToken,'(',')')
             let optional = allowOptional && this.skipValue('?')
@@ -599,7 +653,6 @@ export class Parser {
         } else if (v instanceof InvalidExpression) {
             return
         }
-        this.error(this.peek(),'Cannot assign to this expression')
     }
 
     parseAccessChain(parent: Expression): Expression {
@@ -608,6 +661,7 @@ export class Parser {
             if (field) {
                 return this.parseAccessChain(new FieldAccess(field, parent))
             }
+            return new FieldAccess(Token.empty(this.peek().range),parent)
         } else if (this.skipValue('(')) {
             let args = this.parseExpressionList(')');
             return this.parseAccessChain(new CallAccess(args, parent))
@@ -707,6 +761,7 @@ export class Parser {
 
     parsePrimaryExpression(): Expression {
         let expr: Expression
+        this.suggestHere(CompletionType.keyword,'this','null','true','false')
         if (this.isNext(TokenType.int) || this.isNext(TokenType.float) || this.isValueNext('true','false')) {
             expr = new LiteralExpression(this.next())
         } else if (this.isNext(TokenType.string)) {

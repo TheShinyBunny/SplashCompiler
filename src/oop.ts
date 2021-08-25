@@ -7,6 +7,7 @@ import { DummySplashType, SplashClass, SplashClassType, SplashFunctionType, Spla
 import { NativeFunctions, NativeMethods } from "./native";
 import { Parser } from "./parser";
 import { Processor } from "./processor";
+import { TextLocation, TokenInfo } from "./env";
 
 export abstract class TypeToken {
 
@@ -73,13 +74,16 @@ export class ComboTypeToken extends TypeToken {
 
 export interface Member {
     name: string
+    docs?: string
+    decl?: TextLocation
     type: SplashType
     isStatic: boolean
 }
 
 export abstract class ClassExecutable implements Member {
 
-    constructor(public params: Parameter[], public modifiers: ModifierList) {
+    docs?: string
+    constructor(public params: Parameter[], public modifiers: ModifierList, public decl?: TextLocation) {
 
     }
     abstract name: string;
@@ -95,8 +99,8 @@ export class Method extends ClassExecutable {
     body?: GeneratedBlock
     type: SplashType
 
-    constructor(public name: string, public retType: SplashType, params: Parameter[], modifiers: ModifierList) {
-        super(params,modifiers)
+    constructor(public name: string, public retType: SplashType, params: Parameter[], modifiers: ModifierList, decl?: TextLocation) {
+        super(params,modifiers,decl)
         if (this.modifiers.has(Modifier.get)) {
             this.type = this.retType
         } else {
@@ -139,6 +143,10 @@ export class Method extends ClassExecutable {
         return this.modifiers.has(Modifier.static)
     }
 
+    toString() {
+        return this.modifiers.toString() + this.retType.toString() + ' ' + this.name + '(' + this.params.join(', ') + ')'
+    }
+
 }
 
 export class Parameter {
@@ -151,6 +159,10 @@ export class Parameter {
         let p = new Parameter(this.name, this.type.resolve(ownerType), this.hasDefValue, this.vararg)
         p.defValue = this.defValue
         return p
+    }
+
+    toString() {
+        return this.type.toString() + ' ' + this.name
     }
 
     static getParamAt(index: number, params: Parameter[]) {
@@ -207,7 +219,7 @@ export class Parameter {
         let p = parser.parseParameter()
         if (!p) throw 'Cannot create parameter from ' + str
         p.process(proc)
-        return p.generate(proc)
+        return p.generate()
     }
 }
 
@@ -222,8 +234,8 @@ export class Constructor extends ClassExecutable {
     body?: GeneratedBlock
     type: SplashType
     name: string = 'constructor'
-    constructor(type: SplashType, params: CtorParameter[], modifiers: ModifierList) {
-        super(params,modifiers)
+    constructor(type: SplashType, params: CtorParameter[], modifiers: ModifierList, decl: TextLocation) {
+        super(params,modifiers,decl)
         this.type = new SplashFunctionType(type, this.params.map(p=>p.type))
     }
 
@@ -251,14 +263,19 @@ export class Constructor extends ClassExecutable {
     get isStatic() {
         return true
     }
+    
+    toString() {
+        return '(constructor) ' + this.modifiers.toString() + this.name + '(' + this.params.join(',') + ')'
+    }
 
 }
 
 export class Field implements Member {
-    constructor(public name: string, public modifiers: ModifierList, public type: SplashType, public init?: GeneratedExpression) {
-
+    docs?: string
+    constructor(public name: string, public modifiers: ModifierList, public type: SplashType, public decl: TextLocation, public init?: GeneratedExpression) {
+        
     }
-
+    
     defaultValue(runtime: Runtime): Value {
         return this.init ? this.init.evaluate(runtime) : this.type.defaultValue
     }
@@ -266,6 +283,11 @@ export class Field implements Member {
     get isStatic() {
         return this.modifiers.has(Modifier.static)
     }
+
+    toString() {
+        return '(field) ' + this.name + ': ' + this.type.toString()
+    }
+
 }
 
 export class Value {

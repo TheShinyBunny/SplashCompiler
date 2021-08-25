@@ -1,11 +1,14 @@
 
-import { compileFile, compileModule } from './env'
+import path from 'path'
+import { compileFile, compileModule, Diagnostic, DiagnosticType } from './env'
+import { Parser } from './parser'
+import { Processor } from './processor'
 import { Runtime } from './runtime'
+import { BaseTokenizer, TextRange } from './tokenizer'
 
-const sdk = compileModule('./sdk')
+export const sdk = compileModule(path.resolve(__dirname,'../sdk'))
 
-console.log(sdk)
-const file = './test.splash'
+/* const file = './test.splash'
 
 if (sdk.valid) {
     let compiled = compileFile(file,sdk)
@@ -19,4 +22,17 @@ if (sdk.valid) {
         compiled.run(rt)
         console.timeEnd('execution done')
     }
+} */
+
+
+export {
+    compileFile, 
+    compileModule, 
+    Diagnostic, 
+    DiagnosticType,
+    Parser,
+    BaseTokenizer,
+    Processor,
+    TextRange,
+    Runtime
 }

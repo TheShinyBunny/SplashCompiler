@@ -2,14 +2,15 @@ import { SplashScript } from "./generator"
 import * as fs from 'fs'
 import * as paths from 'path'
 import { Parser } from "./parser"
-import { BaseTokenizer } from "./tokenizer"
+import { BaseTokenizer, TextRange } from "./tokenizer"
 import { Processor } from "./processor"
 import { RootNode } from "./ast"
 import { NativeFunctions, NativeMethods } from "./native"
 
 
 export function compileModule(path: string, sdk?: SplashModule) {
-    let module = new SplashModule(paths.normalize(path))
+    console.log('compiling module',path)
+    let module = new SplashModule(path)
     let asts: RootNode[] = []
 
     let proc = new Processor()
@@ -72,7 +73,7 @@ export function parseFile(file: string): RootNode | undefined {
     let root = parser.parseFile()
     console.timeEnd('compilation done')
 
-    return parser.hasErrors ? undefined : root
+    return parser.diagnostics.length > 0 ? undefined : root
 }
 
 export function processAndGenerate(proc: Processor, ast: RootNode) {
@@ -82,10 +83,10 @@ export function processAndGenerate(proc: Processor, ast: RootNode) {
     proc.process(ast)
     console.timeEnd('processing done')
 
-    if (!proc.hasErrors) {
+    if (proc.diagnostics.length == 0) {
         console.log('generating...')
         console.time('generation done')
-        let generated = ast.generate(proc)
+        let generated = ast.generate()
         console.timeEnd('generation done')
         return generated
     }
@@ -100,4 +101,52 @@ export class SplashModule {
     constructor(public name: string) {
 
     }
+}
+
+
+export interface Diagnostic {
+    file: string
+    range: TextRange
+    message: string
+    type: DiagnosticType
+}
+
+export enum DiagnosticType {
+    error = 1,
+    warn = 2,
+    info = 3,
+    hint = 4
+}
+
+export enum CompletionType {
+    variable = 6,
+    field = 5,
+    method = 2,
+    keyword = 14,
+    class = 7,
+    typeParam = 25,
+    function = 3
+}
+
+export interface PartialCompletion {
+    value: string
+    detail?: string
+    desc?: string
+    type?: CompletionType
+}
+
+export interface Completion extends PartialCompletion {
+    range: TextRange
+}
+
+export interface TextLocation {
+    file: string
+    range: TextRange
+}
+
+export interface TokenInfo {
+    range?: TextRange
+    detail: string
+    desc?: string
+    declaration?: TextLocation
 }

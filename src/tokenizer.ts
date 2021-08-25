@@ -26,6 +26,11 @@ export namespace TextRange {
         return range.start.line == range.end.line
     }
 
+    export function contains(range: TextRange, pos: Position) {
+        return range.start.line <= pos.line && range.start.column <= pos.column
+            && range.end.line >= pos.line && range.end.column >= pos.column;
+    }
+
     export function oneChar(pos: Position): TextRange {
         return plus(pos,1)
     }
@@ -107,6 +112,10 @@ export class Token {
     static dummy(value: string) {
         let t = new BaseTokenizer(value)
         return t.next()
+    }
+
+    static empty(range: TextRange) {
+        return new Token(TokenType.invalid, '', range)
     }
 }
 
@@ -227,6 +236,10 @@ export class BaseTokenizer implements Tokenizer {
                             blockComment += '*' + next
                         } else {
                             blockComment += next
+                            if (next == '\n') {
+                                this.line++
+                                this.column = 1
+                            }
                         }
                     }
                     return new Token(TokenType.comment, blockComment, {start, end: this.getPos()})
@@ -271,7 +284,7 @@ export class BaseTokenizer implements Tokenizer {
                 segments.push(current)
                 let tok = this.next()
                 let stack = 0;
-                while (tok.isValid() && (stack > 0 || tok.value != '}')) {
+                while (this.canRead() && tok.isValid() && (stack > 0 || tok.value != '}')) {
                     (current as ExpressionSegment).tokens.push(tok)
                     if (tok.value == '{') stack++
                     else if (tok.value == '}') stack--

@@ -1,10 +1,11 @@
 import { ModifierList, ParameterNode, RootNode, FunctionNode, ASTNode, TypeParameterNode } from "./ast";
 import { SplashFunction, SplashScript } from "./generator";
 import { BasicTypeToken, ComboTypeToken, FunctionTypeToken, Method, SingleTypeToken, TypeToken } from "./oop";
-import { BuiltinTypes, DummySplashType, SelfSplashType, SplashClass, SplashComboType, SplashFunctionType, SplashInt, SplashOptionalType, SplashParameterizedType, SplashString, SplashType } from "./types";
-import { BaseTokenizer, TextRange, Token } from "./tokenizer";
-import { SplashModule } from "./env";
+import { BuiltinTypes, DummySplashType, SelfSplashType, SplashClass, SplashComboType, SplashFunctionType, SplashInt, SplashOptionalType, SplashParameterizedType, SplashPrimitive, SplashString, SplashType, TypeParameter } from "./types";
+import { BaseTokenizer, Position, TextRange, Token } from "./tokenizer";
+import { Completion, CompletionType, PartialCompletion, SplashModule, TextLocation, TokenInfo } from "./env";
 import { Parser } from "./parser";
+import { Diagnostic, DiagnosticType } from ".";
 
 
 export class Processor {
@@ -16,10 +17,14 @@ export class Processor {
     currentFile?: string
     currentClass?: SplashType
     currentFunction?: SplashFunction | Method
+    diagnostics: Diagnostic[] = []
+    cursor?: Position
+    completionItems: Completion[] = []
+    tokenInfos: TokenInfo[] = []
     hasReturn = false
-    hasErrors = false
     silent = false
     inInstanceContext = false
+
 
     constructor() {
         this.types.push(...Object.values(BuiltinTypes))
@@ -35,22 +40,35 @@ export class Processor {
         this.types.push(...script.classes)
         this.functions.push(...script.functions)
     }
+    
 
     process(ast: RootNode) {
         this.currentFile = ast.file
         ast.process(this)
     }
     
+    suggest(range: TextRange, generator: ()=>PartialCompletion[]) {
+        if (this.cursor && TextRange.contains(range,this.cursor)) {
+            this.completionItems.push(...generator().map(c=>({...c, range})))
+        }
+    }
+
+    addInfo(info: TokenInfo) {
+        this.tokenInfos.push(info)
+    }
 
     error(range: TextRange, msg: string) {
         if (!this.silent) {
             console.log("Validation error in " + this.currentFile + " at " + TextRange.toString(range) + ": " + msg)
-            this.hasErrors = true
+            this.diagnostics.push({file: this.currentFile || '',range, message: msg, type: DiagnosticType.error})
         } else {
             console.log('skipped error, processor is silent (',msg,')')
         }
     }
     
+    location(range: TextRange): TextLocation {
+        return {range, file: this.currentFile || 'unknown'}
+    }
 
     push() {
         this.variables.push({})
@@ -81,20 +99,53 @@ export class Processor {
     }
 
     validateType(token: TypeToken) {
-        if (token.toString() != 'null' && this.resolveType(token) == DummySplashType.null) {
+        this.suggestTypes(token)
+        let res = this.resolveType(token)
+        if (token.toString() != 'null' && res == DummySplashType.null) {
             this.error(token.range,"Unknown type " + token)
+        } else {
+            this.addInfosToType(token,res)
         }
     }
 
-    getFunctionType(name: string): SplashType | undefined {
-        if (this.currentClass) {
-            let funcs = this.currentClass.methods.filter(m=>m.name == name).map(m=>m.resolveFunctionType(this.currentClass || SplashClass.object))
-            if (funcs.length > 0) return SplashType.combine(funcs)
+    addInfosToType(token: TypeToken, type: SplashType) {
+        if (type instanceof SplashClass || type instanceof SplashPrimitive || type instanceof DummySplashType || type instanceof TypeParameter) {
+            this.addInfo({range: token.range, detail: type.toString(),declaration: type.declaration})
+        } else if (type instanceof SplashComboType && token instanceof ComboTypeToken) {
+            type.types.forEach((t,i)=>this.addInfosToType(token.options[i],t))
+        } else if (type instanceof SplashOptionalType) {
+            this.addInfosToType(token,type.inner)
+        } else if (type instanceof SelfSplashType) {
+            this.addInfosToType(token,type.base)
+        } else if (type instanceof SplashParameterizedType) {
+            let tok = token as BasicTypeToken
+            this.addInfosToType(tok,type.base)
+            type.params.forEach((p,i)=>this.addInfosToType(tok.typeParams[i],p))
         }
-        let funcs = this.functions.filter(f=>f.name == name).map(f=>f.toFunctionType())
-        if (funcs.length > 0) return SplashType.combine(funcs)
-        let rfuncs = this.rawFunctions.filter(f=>f.name.value == name).map(f=>f.toFunctionType(this))
-        if (rfuncs.length > 0) return SplashType.combine(rfuncs)
+    }
+
+    suggestTypes(token: TypeToken) {
+        if (token instanceof BasicTypeToken) {
+            this.suggest(token.range,()=>this.getTypeParams().map(tp=>({value: tp.name, type: CompletionType.typeParam})))
+            this.suggest(token.range,()=>this.types.map(t=>({value: t.name, type: CompletionType.class})))
+            token.typeParams.forEach(p=>this.suggestTypes(p))
+        } else if (token instanceof FunctionTypeToken) {
+            this.suggestTypes(token.returnType)
+            token.params.forEach(p=>this.suggestTypes(p))
+        } else if (token instanceof ComboTypeToken) {
+            token.options.forEach(o=>this.suggestTypes(o))
+        }
+    }
+
+    getFunctions(): BaseFunction[] {
+        let funcs: BaseFunction[] = []
+        if (this.currentClass) {
+            funcs.push(...this.currentClass.methods.map(m=>({name: m.name, type: m.resolveFunctionType(this.currentClass || SplashClass.object), docs: m.docs, decl: m.decl})))
+        }
+        funcs.push(...this.functions.map(f=>({name: f.name, type: f.toFunctionType(), docs: f.docs, decl: f.decl})))
+        funcs.push(...this.rawFunctions.map(rf=>({name: rf.name.value, type: rf.toFunctionType(this), docs: rf.docs, decl: rf.label})))
+        console.log('functions:',funcs)
+        return funcs
     }
 
     resolveType(token: TypeToken): SplashType {
@@ -149,6 +200,14 @@ export class Processor {
         }
     }
 
+    getTypeParams() {
+        if (this.currentClass) {
+            return this.currentClass.typeParams
+        }
+        //todo: add function type params
+        return []
+    }
+
     getTypeParam(name: string) {
         if (this.currentClass) {
             let tp = this.currentClass.typeParams.find(t=>t.name == name)
@@ -164,4 +223,11 @@ export class Variable {
     constructor(public name: Token, public type: SplashType) {
 
     }
+}
+
+export interface BaseFunction {
+    name: string
+    type: SplashType
+    docs?: string
+    decl?: TextLocation
 }

@@ -1,8 +1,9 @@
 
 
 import { ExpressionList } from "./ast"
+import { TextLocation } from "./env"
 import { Constructor, Field, Member, Method, Parameter, Value } from "./oop"
-import { BinaryOperator, getOpMethodName, isBidirectional, Modifier, UnaryOperator } from "./operators"
+import { BinaryOperator, getOpMethodName, Modifier, UnaryOperator } from "./operators"
 import { Processor } from "./processor"
 
 export abstract class SplashType {
@@ -11,6 +12,7 @@ export abstract class SplashType {
     staticFields: {[name: string]: Value} = {}
     declaredMethods: Method[] = []
     typeParams: TypeParameter[] = []
+    declaration?: TextLocation
 
     constructor(public name: string) {
 

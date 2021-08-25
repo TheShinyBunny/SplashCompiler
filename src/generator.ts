@@ -5,6 +5,7 @@ import { AssignmentOperator, BinaryOperator, UnaryOperator } from "./operators";
 import { SplashArray, SplashBoolean, SplashClass, SplashComboType, SplashFloat, SplashFunctionType, SplashInt, SplashOptionalType, SplashString, SplashType } from "./types";
 import { Returned, Runtime, SplashRuntimeError } from "./runtime";
 import { TokenType } from "./tokenizer";
+import { TextLocation } from "./env";
 
 
 export abstract class Generated {
@@ -79,7 +80,7 @@ export class GenVarDeclaration extends GeneratedStatement {
 
 export class SplashFunction {
 
-    constructor(public name: string, public retType: SplashType, public params: Parameter[], public body?: GeneratedBlock) {
+    constructor(public name: string, public retType: SplashType, public params: Parameter[],  public decl?: TextLocation, public body?: GeneratedBlock, public docs?: string) {
 
     }
 
