@@ -125,6 +125,22 @@ export class Returned extends Error {
     }
 }
 
+export class Continue extends Error {
+    constructor() {
+        super('continue')
+
+        Object.setPrototypeOf(this, Continue.prototype);
+    }
+}
+
+export class Break extends Error {
+    constructor() {
+        super('break')
+
+        Object.setPrototypeOf(this, Break.prototype);
+    }
+}
+
 export class SplashRuntimeError extends Error {
     constructor(msg: string) {
         super(msg)

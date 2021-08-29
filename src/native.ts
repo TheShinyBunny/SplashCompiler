@@ -146,7 +146,7 @@ export class NativeMethods {
             let ret = proc.resolveTypeFromString(u.retType) || SplashClass.object
             let par = u.params?.map(p=>Parameter.readFromString(p,proc,inType)) || []
             proc.currentClass = undefined
-            inType.addMember(new Method(u.name,ret,par,new ModifierList(u.modifiers)))
+            //inType.addMember(new Method(u.name,ret,par,new ModifierList(u.modifiers)))
             console.log('added native method ' + u.name + ' to',inType.toString())
             nativeMethods.push({
                 name: u.name,

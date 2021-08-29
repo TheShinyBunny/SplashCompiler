@@ -8,7 +8,7 @@ import { BaseTokenizer, TextRange } from './tokenizer'
 
 export const sdk = compileModule(path.resolve(__dirname,'../sdk'))
 
-/* const file = './test.splash'
+const file = './test.splash'
 
 if (sdk.valid) {
     let compiled = compileFile(file,sdk)
@@ -22,7 +22,7 @@ if (sdk.valid) {
         compiled.run(rt)
         console.timeEnd('execution done')
     }
-} */
+}
 
 
 export {

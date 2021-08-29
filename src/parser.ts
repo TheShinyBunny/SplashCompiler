@@ -1,5 +1,5 @@
 import { Diagnostic, DiagnosticType } from ".";
-import { ElseStatement, NullExpression, ArrayExpression, AssignableExpression, Assignment, BinaryExpression, CallAccess, CallStatement, CodeBlock, Expression, FieldAccess, IfStatement, InvalidExpression, LiteralExpression, MainBlock, RootNode, Statement, UnaryExpression, VarDeclaration, VariableAccess, ModifierList, ParameterNode, FunctionNode, ReturnStatement, ExpressionList, StringExpression, ClassDeclaration, ClassMember, MethodNode, FieldNode, ConstructorParamNode, ConstructorNode, ThisAccess, ASTNode, IndexAccess, TypeParameterNode, RepeatStatement, ForStatement } from "./ast";
+import { ElseStatement, NullExpression, ArrayExpression, AssignableExpression, Assignment, BinaryExpression, CallAccess, CallStatement, CodeBlock, Expression, FieldAccess, IfStatement, InvalidExpression, LiteralExpression, MainBlock, RootNode, Statement, UnaryExpression, VarDeclaration, VariableAccess, ModifierList, ParameterNode, FunctionNode, ReturnStatement, ExpressionList, StringExpression, ClassDeclaration, ClassMember, MethodNode, FieldNode, ConstructorParamNode, ConstructorNode, ThisAccess, ASTNode, IndexAccess, TypeParameterNode, RepeatStatement, ForStatement, WhileStatement, BreakContinueStatement } from "./ast";
 import { Completion, CompletionType, PartialCompletion, TextLocation } from "./env";
 import { BasicTypeToken, ComboTypeToken, FunctionTypeToken, SingleTypeToken, TypeToken } from "./oop";
 import { AssignmentOperator, BinaryOperator, Modifier } from "./operators";
@@ -12,6 +12,7 @@ export class Parser {
     diagnostics: Diagnostic[] = []
     cursor?: Position
     completionItems: Completion[] = []
+    canUseBreakContinue = false
 
     constructor(public file: string, public tokenizer: Tokenizer) {
         this.lastToken = Token.EOF;
@@ -354,7 +355,7 @@ export class Parser {
     }
 
     parseMethod(modifiers: ModifierList, retType: TypeToken, name: Token): MethodNode {
-        modifiers.assertHasOnly(this,Modifier.final,Modifier.private,Modifier.abstract,Modifier.accessor,Modifier.assigner,Modifier.get,Modifier.set,Modifier.indexer,Modifier.invoker,Modifier.iterator,Modifier.native,Modifier.operator,Modifier.protected,Modifier.static)
+        modifiers.assertHasOnly(this,Modifier.final,Modifier.private,Modifier.abstract,Modifier.accessor,Modifier.assigner,Modifier.get,Modifier.set,Modifier.indexer,Modifier.invoker,Modifier.iterator,Modifier.native,Modifier.operator,Modifier.bidir,Modifier.protected,Modifier.static)
         modifiers.checkIncompatible(this,Modifier.final,Modifier.abstract)
         modifiers.checkIncompatible(this,Modifier.accessor,Modifier.invoker,Modifier.assigner,Modifier.iterator,Modifier.operator,Modifier.indexer)
         modifiers.checkIncompatible(this,Modifier.accessor,Modifier.invoker,Modifier.assigner,Modifier.iterator,Modifier.operator,Modifier.get,Modifier.set)
@@ -388,7 +389,7 @@ export class Parser {
     }
 
     parseStatement(): Statement | undefined {
-        this.suggestHere(CompletionType.keyword,'var','if','return','repeat','for')
+        this.suggestHere(CompletionType.keyword,'var','if','return','repeat','for','while')
         if (this.isValueNext('var')) {
             return this.parseVarDecl()
         } else if (this.isValueNext('if')) {
@@ -402,10 +403,24 @@ export class Parser {
                 expr = undefined
             }
             return new ReturnStatement(label.range, expr)
+        } else if (this.isValueNext('break')) {
+            let label = this.next()
+            if (!this.canUseBreakContinue) {
+                this.error(label, "Break cannot be used outside a for, while or repeat statement.")
+            }
+            return new BreakContinueStatement(label)
+        } else if (this.isValueNext('continue')) {
+            let label = this.next()
+            if (!this.canUseBreakContinue) {
+                this.error(label, "Continue cannot be used outside a for, while or repeat statement.")
+            }
+            return new BreakContinueStatement(label)
         } else if (this.isValueNext('repeat')) {
             return this.parseRepeat()
         } else if (this.isValueNext('for')) {
             return this.parseFor()
+        } else if (this.isValueNext('while')) {
+            return this.parseWhile()
         } else {
             return this.parseVarAccess()
         }
@@ -446,7 +461,12 @@ export class Parser {
         if (this.expectValue('(')) {
             let expr = this.parseExpression()
             this.expectValue(')')
+            let before = this.canUseBreakContinue
+            
+            this.canUseBreakContinue = true
             let run = this.parseStatement()
+            this.canUseBreakContinue = before
+
             if (run) {
                 return new RepeatStatement(label, expr, run)
             }
@@ -461,10 +481,33 @@ export class Parser {
                 this.expectValue(':')
                 let iter = this.parseExpression()
                 this.expectValue(')')
+
+                let before = this.canUseBreakContinue
+            
+                this.canUseBreakContinue = true
                 let then = this.parseStatement()
+                this.canUseBreakContinue = before
+
                 if (then) {
                     return new ForStatement(label, varname, iter, then)
                 }
+            }
+        }
+    }
+
+    parseWhile(): Statement | undefined {
+        let label = this.next()
+        if (this.expectValue('(')) {
+            let expr = this.parseExpression()
+            this.expectValue(')')
+
+            let before = this.canUseBreakContinue
+            
+            this.canUseBreakContinue = true
+            let run = this.parseStatement()
+            this.canUseBreakContinue = before
+            if (run) {
+                return new WhileStatement(label, expr, run)
             }
         }
     }

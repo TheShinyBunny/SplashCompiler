@@ -1,11 +1,11 @@
-import { GenArrayCreation, GenAssignableExpression, GenAssignment, GenCall, GenCallAccess, GenClassDecl, GenConstExpression, Generated, GeneratedBinary, GeneratedBlock, GeneratedExpression, GeneratedLiteral, GeneratedReturn, GeneratedStatement, GeneratedUnary, GenFieldAccess, SplashFunction, GenIfStatement, GenStringLiteral, GenVarAccess, GenVarDeclaration, SplashScript, GenIndexAccess, GeneratedRepeat, GeneratedFor } from "./generator";
-import { ExpressionSegment, StringToken, TextRange, Token, TokenType } from "./tokenizer";
+import { GenArrayCreation, GenAssignableExpression, GenAssignment, GenCall, GenCallAccess, GenConstExpression, GeneratedBinary, GeneratedBlock, GeneratedExpression, GeneratedLiteral, GeneratedReturn, GeneratedStatement, GeneratedUnary, GenFieldAccess, SplashFunction, GenIfStatement, GenStringLiteral, GenVarAccess, GenVarDeclaration, SplashScript, GenIndexAccess, GeneratedRepeat, GeneratedFor, GeneratedWhile, GenBreakContinue } from "./generator";
+import { TextRange, Token, TokenType } from "./tokenizer";
 import { Parser } from "./parser";
-import { Constructor, CtorParameter, Field, Member, Method, Parameter, TypeToken, Value } from "./oop";
+import { Constructor, CtorParameter, Field, Method, Parameter, TypeToken, Value } from "./oop";
 import { Processor } from "./processor";
-import { AssignmentOperator, BinaryOperator, getActualOpReturnType, getOpMethodName, isBidirectional, Modifier, UnaryOperator } from "./operators";
+import { AssignmentOperator, BinaryOperator, getActualOpReturnType, Modifier, UnaryOperator } from "./operators";
 import { BuiltinTypes, DummySplashType, SplashArray, SplashBoolean, SplashClass, SplashClassType, SplashComboType, SplashFloat, SplashFunctionType, SplashInt, SplashOptionalType, SplashParameterizedType, SplashString, SplashType, TypeParameter } from "./types";
-import { CompletionType, TextLocation, TokenInfo } from "./env";
+import { CompletionType, TextLocation } from "./env";
 
 
 export abstract class ASTNode {
@@ -42,6 +42,14 @@ export class RootNode extends ASTNode {
         }
         for (let f of this.functions) {
             f.index(proc)
+        }
+        proc.currentFile = undefined
+    }
+
+    indexChildren(proc: Processor) {
+        proc.currentFile = this.file
+        for (let c of this.classes) {
+            c.indexChildren(proc)
         }
         proc.currentFile = undefined
     }
@@ -230,8 +238,11 @@ export class BinaryExpression extends Expression {
         let leftType = this.left.getResultType(proc)
         let rightType = this.right.getResultType(proc)
         let binop = leftType.getBinaryOperation(this.op.value as BinaryOperator, rightType)
-        if (!binop && isBidirectional(this.op.value as BinaryOperator)) {
-            binop = rightType.getBinaryOperation(this.op.value as BinaryOperator, leftType)
+        if (!binop) {
+            let bidir = rightType.getBinaryOperation(this.op.value as BinaryOperator, leftType)
+            if (bidir?.modifiers.has(Modifier.bidir)) {
+                binop = bidir
+            }
         }
         if (binop) {
             proc.addInfo({range: this.op.range, detail: binop.toString(), declaration: binop.decl})
@@ -443,7 +454,6 @@ export class VariableAccess extends AssignableExpression {
                 return SplashClassType.of(cls)
             }
         }
-        console.log('variable ' + this.name.value + ' not found in',proc)
         proc.error(this.name.range,"Unknown variable '" + this.name.value + "'")
         return SplashClass.object
     }
@@ -619,12 +629,9 @@ export class TypeParameterNode extends ASTNode {
     constructor(public base: Token, public extend?: TypeToken) {
         super('type_parameter')
     }
-
-    init(proc: Processor, index: number) {
+    
+    process(proc: Processor, index: number) {
         this.param = new TypeParameter(this.base.value, index, this.extend ? proc.resolveType(this.extend) : undefined)
-    }
-
-    process(proc: Processor) {
         if (this.extend) {
             proc.validateType(this.extend)
         }
@@ -689,6 +696,9 @@ export class FunctionNode extends ASTNode {
             proc.error(this.label.range, "Missing function body")
         }
         proc.validateType(this.retType)
+
+        proc.addInfo({range: this.name.range, detail: this.name.value + ': ' + this.toFunctionType(proc).toString(), desc: this.docs, declaration: proc.location(this.name.range)})
+
         this.resRetType = proc.resolveType(this.retType)
         let uniqueNames: string[] = []
         let hasVararg = false
@@ -728,7 +738,7 @@ export class FunctionNode extends ASTNode {
 
 export class ReturnStatement extends Statement {
     
-    constructor(label: TextRange, public expr: Expression | undefined) {
+    constructor(label: TextRange, public expr?: Expression) {
         super('return',label)
     }
 
@@ -811,18 +821,26 @@ export class MethodNode extends ClassMember {
             if (this.params.length != 1) {
                 proc.error(this.modifiers.get(Modifier.set).range, "Setter methods should only take 1 parameter")
             }
+        } else if (this.modifiers.has(Modifier.bidir)) {
+            if (!this.modifiers.has(Modifier.operator)) {
+                proc.error(this.modifiers.get(Modifier.bidir).range, "Bidir modifier can only be used with 'operator'")
+            }
         }
         
         let processedParams: Parameter[] = []
-
+        
         for (let p of this.params) {
             processedParams.push(new Parameter(p.name.value,proc.resolveType(p.type),p.defValue !== undefined,p.vararg))
         }
         
         this.method = new Method(this.name.value, proc.resolveType(this.retType), processedParams, this.modifiers, proc.location(this.name.range))
         this.method.docs = this.docs
+        proc.addInfo({range: this.name.range, detail: this.method.toString(), desc: this.docs, declaration: this.method.decl})
+
         let existing = type.declaredMethods.find(m=>m.name == this.name.value && Parameter.allParamsMatch(m.params,processedParams.map(p=>p.type)))
-        if (!existing) {
+        if (existing) {
+            proc.error(this.name.range, "Duplicate method found with same signature '" + this.name.value + "'")
+        } else {
             type.addMember(this.method)
             console.log('added method',this.name.value,'to',type.toString())
         }
@@ -883,7 +901,6 @@ export class ClassDeclaration extends ASTNode {
 
     constructor(public name: Token, public typeParams: TypeParameterNode[], public body: ClassMember[], public modifiers: ModifierList) {
         super('class_decl')
-        
     }
 
     index(proc: Processor) {
@@ -892,26 +909,19 @@ export class ClassDeclaration extends ASTNode {
         } else {
             this.type = new SplashClass(this.name.value)
         }
-        if (!this.modifiers.has(Modifier.native)) {
-            proc.types.push(this.type)
+        this.type.declaration = proc.location(this.name.range)
+        proc.types.push(this.type)
+        
+    }
 
-            let index = 0;
-            for (let tp of this.typeParams) {
-                tp.init(proc,index)
-                if (tp.param) {
-                    this.type.typeParams.push(tp.param)
-                }
-                index++;
+    indexChildren(proc: Processor) {
+        if (this.type) {
+            proc.currentClass = this.type
+            for (let m of this.body) {
+                m.index(proc, this.type)
             }
+            proc.currentClass = undefined
         }
-
-        proc.currentClass = this.type
-
-        for (let m of this.body) {
-            m.index(proc, this.type)
-        }
-
-        proc.currentClass = undefined
     }
 
     process(proc: Processor): void {
@@ -919,12 +929,17 @@ export class ClassDeclaration extends ASTNode {
         proc.push()
 
         let uniqueTP: string[] = []
+        let index = 0
         for (let tp of this.typeParams) {
-            tp.process(proc)
+            tp.process(proc,index)
             if (uniqueTP.includes(tp.base.value)) {
                 proc.error(tp.base.range,'Duplicate type parameter')
             } else {
                 uniqueTP.push(tp.base.value)
+                if (tp.param) {
+                    this.type?.typeParams.push(tp.param)
+                    index++
+                }
             }
         }
 
@@ -1160,4 +1175,39 @@ export class ForStatement extends Statement {
         return new GeneratedFor(this.varname.value,this.iter.generate(),this.then.generate())
     }
     
+}
+
+export class WhileStatement extends Statement {
+    constructor(label: Token, public expr: Expression, public run: Statement) {
+        super('while',label.range)
+    }
+
+    process(proc: Processor): void {
+        let type = this.expr.getResultType(proc)
+        if (!type.getValidMethod('toBoolean')) {
+            proc.error(this.expr.range,"This expression cannot be cast to boolean")
+        }
+        proc.push()
+        this.run.process(proc)
+        proc.pop()
+    }
+    generate(): GeneratedStatement {
+        return new GeneratedWhile(this.expr.generate(),this.run.generate())
+    }
+}
+
+export class BreakContinueStatement extends Statement {
+    constructor(public token: Token) {
+        super(token.value,token.range)
+    }
+    process(proc: Processor): void {
+        
+    }
+    generate(): GeneratedStatement {
+        if (this.token.value == 'break') {
+            return GenBreakContinue.break
+        } else {
+            return GenBreakContinue.continue
+        }
+    }
 }

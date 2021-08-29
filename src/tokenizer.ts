@@ -154,7 +154,7 @@ const symbols = ['~','`',';','!','@','#','$','%','^','&','*','(',')','-','+','='
 
 const multiCharOperators = ['++','--','&&','||','**','//','<=','>=','==','!=','..','...','+=','-=','*=','/=','%=','**=','//='];
 
-const keywords = ['main','function','if','this','var','const','as','is','in','while','for','switch','repeat','class','return','constructor','private','protected','abstract','native','final','static','readonly','operator','iterator','get','set','indexer','accessor','assigner','invoker','true','false','null','void']
+const keywords = ['main','function','if','this','var','const','as','is','in','while','for','switch','repeat','class','return','constructor','private','protected','abstract','native','final','static','readonly','operator','iterator','get','set','indexer','accessor','assigner','invoker','bidir','true','false','null','void','break','continue']
 
 const escapableChars: {[key: string]: string} = {
     '\\': '\\',
@@ -234,6 +234,13 @@ export class BaseTokenizer implements Tokenizer {
                                 break
                             }
                             blockComment += '*' + next
+                        } else if (next == ' ') {
+                            while (next == ' ') {
+                                next = this.nextChar()
+                            }
+                            this.column--
+                            this.pos--
+                            blockComment += ' '
                         } else {
                             blockComment += next
                             if (next == '\n') {

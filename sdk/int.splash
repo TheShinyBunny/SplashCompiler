@@ -3,14 +3,14 @@ native class int {
 
     native static int parse(string value)
 
-    native operator int add(int other)
-    native operator float add(float other)
+    native bidir operator int add(int other)
+    native bidir operator float add(float other)
 
     native operator int sub(int other)
     native operator float sub(float other)
 
-    native operator int mul(int other)
-    native operator float mul(float other)
+    native bidir operator int mul(int other)
+    native bidir operator float mul(float other)
 
     native operator float div(int | float other)
 

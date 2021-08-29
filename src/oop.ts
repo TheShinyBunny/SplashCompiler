@@ -1,13 +1,13 @@
-import { ExpressionList, ModifierList, ParameterNode, RootNode } from "./ast";
-import { GeneratedBlock, GeneratedExpression, SplashScript } from "./generator";
-import { BinaryOperator, isBidirectional, Modifier, transformOperatorResult, UnaryOperator } from "./operators";
+import { ModifierList } from "./ast";
+import { GeneratedBlock, GeneratedExpression } from "./generator";
+import { BinaryOperator, Modifier, transformOperatorResult, UnaryOperator } from "./operators";
 import { Returned, Runtime } from "./runtime";
 import { BaseTokenizer, TextRange, Token } from "./tokenizer";
-import { DummySplashType, SplashClass, SplashClassType, SplashFunctionType, SplashOptionalType, SplashParameterizedType, SplashPrimitive, SplashString, SplashType } from "./types";
-import { NativeFunctions, NativeMethods } from "./native";
+import { DummySplashType, SplashClass, SplashFunctionType, SplashOptionalType, SplashParameterizedType, SplashPrimitive, SplashString, SplashType } from "./types";
+import { NativeMethods } from "./native";
 import { Parser } from "./parser";
 import { Processor } from "./processor";
-import { TextLocation, TokenInfo } from "./env";
+import { TextLocation } from "./env";
 
 export abstract class TypeToken {
 
@@ -377,12 +377,10 @@ export class Value {
     invokeBinOperator(runtime: Runtime, op: BinaryOperator, other: Value): Value {
         let method = this.type.getBinaryOperation(op,other.type)
         if (!method) {
-            if (isBidirectional(op)) {
-                method = other.type.getBinaryOperation(op,this.type)
-                if (method) {
-                    let res = method.invoke(runtime, this.type, other, this)
-                    return transformOperatorResult(res, method.name, op)
-                }
+            method = other.type.getBinaryOperation(op,this.type)
+            if (method?.modifiers.has(Modifier.bidir)) {
+                let res = method.invoke(runtime, this.type, other, this)
+                return transformOperatorResult(res, method.name, op)
             }
             console.log('did not find bin operator',this,op,other)
             return Value.dummy

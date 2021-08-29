@@ -1,17 +1,46 @@
 
-
+/*
+Prints a message to the console.
+The message may be any kind of object, and the function will call .toString() to convert it into a string.
+*/
 native function print(object msg)
 
+/*
+Reads a line from the console.
+The program will wait until the user writes some text and hits Enter,
+then the function will return the string that was entered.
+
+An optional message may be provided to print to the console right before the input
+*/
 native function string readLine(string? msg)
 
+/*
+Reads an integer from the console.
+Works like `readLine` but parses the result as an int.
+
+An optional message may be provided to print to the console right before the input
+*/
 function int readInt(string? msg) {
     return int.parse(readLine(msg))
 }
 
+/*
+The object is the base class for all other classes in splash.
+Every class is a subclass of this class.
+*/
 native class object {
 
+    /*
+    Compares this object to another object.
+    If they are the same object, returns 0.
+    Otherwise, the result may be either 1 or -1 according to their random internal ID.
+    */
     native operator int compare(this other)
 
+    /*
+    Concats this object with a string.
+    Converts this object to a string using this.toString() and appends the given string to it
+    */
     operator string add(string str) {
         return "{this}{str}"
     }
@@ -26,5 +55,9 @@ native class boolean {
 
     native operator boolean and(boolean other)
     native operator boolean or(boolean other)
+
+    boolean toBoolean() {
+        return this
+    }
 
 }

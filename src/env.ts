@@ -13,14 +13,6 @@ export function compileModule(path: string, sdk?: SplashModule) {
     let module = new SplashModule(path)
     let asts: RootNode[] = []
 
-    let proc = new Processor()
-    NativeFunctions.init(proc)
-    NativeMethods.init(proc)
-
-    if (sdk) {
-        proc.import(sdk)
-    }
-
     for (let f of fs.readdirSync(path)) {
         if (paths.extname(f) == '.splash') {
             let fp = paths.join(path,f)
@@ -30,10 +22,22 @@ export function compileModule(path: string, sdk?: SplashModule) {
             }
         }
     }
-
+    
+    let proc = new Processor()
+    
+    if (sdk) {
+        proc.import(sdk)
+    }
+    
     for (let ast of asts) {
         ast.index(proc)
     }
+    for (let ast of asts) {
+        ast.indexChildren(proc)
+    }
+    
+    NativeFunctions.init(proc)
+    NativeMethods.init(proc)
 
     for (let ast of asts) {
         let script = processAndGenerate(proc,ast)

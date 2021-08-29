@@ -25,9 +25,8 @@ export class Processor {
     silent = false
     inInstanceContext = false
 
-
     constructor() {
-        this.types.push(...Object.values(BuiltinTypes))
+        this.types.push(DummySplashType.void,DummySplashType.null)
     }
 
     import(module: SplashModule) {
@@ -144,7 +143,6 @@ export class Processor {
         }
         funcs.push(...this.functions.map(f=>({name: f.name, type: f.toFunctionType(), docs: f.docs, decl: f.decl})))
         funcs.push(...this.rawFunctions.map(rf=>({name: rf.name.value, type: rf.toFunctionType(this), docs: rf.docs, decl: rf.label})))
-        console.log('functions:',funcs)
         return funcs
     }
 

@@ -25,17 +25,6 @@ export enum BinaryOperator {
     default = '~'
 }
 
-export function isBidirectional(op: BinaryOperator) {
-    switch (op) {
-        case BinaryOperator.add:
-        case BinaryOperator.mul:
-        case BinaryOperator.equals:
-        case BinaryOperator.ne:
-            return true
-    }
-    return false
-}
-
 export function getOpMethodName(op: BinaryOperator) {
     switch (op) {
         case BinaryOperator.lt:
@@ -111,5 +100,6 @@ export enum Modifier {
     indexer,
     accessor,
     assigner,
-    invoker
+    invoker,
+    bidir
 }

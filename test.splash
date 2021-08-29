@@ -1,19 +1,10 @@
 
 main {
-  for(var x : [1,2,3]) {
-    print(x)
+  var x = 20
+
+  while (x > 0) {
+    if (x < 10) break
+
+    x -= 1
   }
-  repeat (5) {
-    print('lol')
-  }
-
-  print("Hello")
-
-  sayHi(p)
-}
-
-
-# hi
-function sayHi(Person to) {
-  print("YOOOOOO whaddup {to}")
 }

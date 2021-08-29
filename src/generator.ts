@@ -3,7 +3,7 @@ import { NativeFunctions } from "./native";
 import { Parameter, Value } from "./oop";
 import { AssignmentOperator, BinaryOperator, UnaryOperator } from "./operators";
 import { SplashArray, SplashBoolean, SplashClass, SplashComboType, SplashFloat, SplashFunctionType, SplashInt, SplashOptionalType, SplashString, SplashType } from "./types";
-import { Returned, Runtime, SplashRuntimeError } from "./runtime";
+import { Break, Continue, Returned, Runtime, SplashRuntimeError } from "./runtime";
 import { TokenType } from "./tokenizer";
 import { TextLocation } from "./env";
 
@@ -32,7 +32,7 @@ export class GeneratedBlock extends GeneratedStatement {
                 s.run(runtime)
             }
         } catch (e) {
-            if (e instanceof Returned) {
+            if (e instanceof Returned || e instanceof Break || e instanceof Continue) {
                 throw e
             } else if (e instanceof SplashRuntimeError) {
                 console.log("Runtime Error:",e.message)
@@ -389,7 +389,15 @@ export class GeneratedRepeat extends GeneratedStatement {
         let times = this.expr.evaluate(runtime)
         if (times.type.canAssignTo(SplashInt.instance)) {
             for (let i = 0; i < times.inner; i++) {
-                this.then.run(runtime)
+                try {
+                    this.then.run(runtime)
+                } catch (e) {
+                    if (e instanceof Break) {
+                        break
+                    } else if (!(e instanceof Continue)) {
+                        throw e
+                    }
+                }
             }
         }
     }
@@ -409,10 +417,57 @@ export class GeneratedFor extends GeneratedStatement {
         if (arr.type.canAssignTo(SplashArray.instance)) {
             for (let val of arr.inner) {
                 runtime.setVariable(this.varname,val)
-                this.then.run(runtime)
+                try {
+                    this.then.run(runtime)
+                } catch (e) {
+                    if (e instanceof Break) {
+                        break
+                    } else if (!(e instanceof Continue)) {
+                        throw e
+                    }
+                }
             }
         } else {
             console.log('value returned from iterator is not an array')
+        }
+    }
+    
+}
+
+export class GeneratedWhile extends GeneratedStatement {
+    constructor(public expr: GeneratedExpression, public then: GeneratedStatement) {
+        super()
+    }
+    run(runtime: Runtime): void {
+        let cond = this.expr.evaluate(runtime)
+        while (cond.toBoolean(runtime)) {
+            try {
+                this.then.run(runtime)
+            } catch (e) {
+                if (e instanceof Break) {
+                    break
+                } else if (!(e instanceof Continue)) {
+                    throw e
+                }
+            }
+            cond = this.expr.evaluate(runtime)
+        }
+    }
+}
+
+export class GenBreakContinue extends GeneratedStatement {
+
+    static break = new GenBreakContinue('break')
+    static continue = new GenBreakContinue('continue')
+
+    constructor(public type: 'break' | 'continue') {
+        super()
+    }
+    run(runtime: Runtime): void {
+        if (this.type == 'break') {
+            throw new Break();
+        } else if (this.type == 'continue') {
+            throw new Continue();
         }
     }
     
