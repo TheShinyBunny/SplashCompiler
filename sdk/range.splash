@@ -1,0 +1,22 @@
+
+class IntRange {
+  int from
+  int to
+
+  constructor(this.from, this.to)
+
+  iterator int[]() {
+    var arr = []
+    var current = this.from
+    while (current < this.to) {
+      arr.add(current)
+      current++
+    }
+    return arr
+  }
+
+  boolean contains(int x) {
+    return this.from <= x && this.to > x
+  }
+
+}

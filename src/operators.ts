@@ -70,8 +70,7 @@ function getComparisonResult(res: Value, op: BinaryOperator) {
 export enum UnaryOperator {
     positive = '+',
     negative = '-',
-    not = '!',
-    range = '..'
+    not = '!'
 }
 
 export enum AssignmentOperator {

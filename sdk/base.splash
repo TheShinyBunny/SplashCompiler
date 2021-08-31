@@ -16,7 +16,7 @@ native function string readLine(string? msg)
 
 /*
 Reads an integer from the console.
-Works like `readLine` but parses the result as an int.
+Works like `readLine` but parses the result to int.
 
 An optional message may be provided to print to the console right before the input
 */

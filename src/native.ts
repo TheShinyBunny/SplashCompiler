@@ -74,12 +74,6 @@ export class NativeFunctions {
         return new Value(SplashString.instance, res)
     }
 
-    @NativeFunction('int',['string? query'])
-    readInt(r: Runtime, msg: Value) {
-        let res = this.readLine(r,msg)
-        return new Value(SplashInt.instance, parseInt(res.inner))
-    }
-
 }
 
 interface UnbakedNativeMethod {
@@ -179,6 +173,11 @@ export class NativeMethods {
         return new Value(SplashString.instance,val.inner.substring(0,val.inner.length - chars.inner))
     }
 
+    @NativeMethod('int',['string other'],[Modifier.operator])
+    string_compare(r: Runtime, str: Value, other: Value) {
+        return new Value(SplashInt.instance,str.inner.localeCompare(other.inner))
+    }
+
     // INT
     @NativeMethod('int',['int other'],[Modifier.operator])
     int_add(r: Runtime, val: Value, other: Value) {
@@ -241,7 +240,11 @@ export class NativeMethods {
 
     @NativeMethod('int',['string value'],[Modifier.static])
     int_parse(r: Runtime, _: Value, str: Value) {
-        return new Value(SplashInt.instance, parseInt(str.inner))
+        let res = parseInt(str.inner)
+        if (isNaN(res)) {
+            throw new SplashRuntimeError("Invalid integer '" + str.inner + "'");
+        }
+        return new Value(SplashInt.instance, res)
     }
 
     // FLOAT

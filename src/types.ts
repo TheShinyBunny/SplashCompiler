@@ -129,7 +129,7 @@ export abstract class SplashType {
             return this.canAssignTo(type.base)
         }
         if (type instanceof SplashOptionalType) {
-            return this == type.inner
+            return this == type.inner || this.name === 'null'
         }
         if (type instanceof SplashComboType) {
             return type.types.some(t=>this.canAssignTo(t))

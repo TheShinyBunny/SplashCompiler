@@ -1,4 +1,4 @@
-import { GenArrayCreation, GenAssignableExpression, GenAssignment, GenCall, GenCallAccess, GenConstExpression, GeneratedBinary, GeneratedBlock, GeneratedExpression, GeneratedLiteral, GeneratedReturn, GeneratedStatement, GeneratedUnary, GenFieldAccess, SplashFunction, GenIfStatement, GenStringLiteral, GenVarAccess, GenVarDeclaration, SplashScript, GenIndexAccess, GeneratedRepeat, GeneratedFor, GeneratedWhile, GenBreakContinue } from "./generator";
+import { GenArrayCreation, GenAssignableExpression, GenAssignment, GenCall, GenCallAccess, GenConstExpression, GeneratedBinary, GeneratedBlock, GeneratedExpression, GeneratedLiteral, GeneratedReturn, GeneratedStatement, GeneratedUnary, GenFieldAccess, SplashFunction, GenIfStatement, GenStringLiteral, GenVarAccess, GenVarDeclaration, SplashScript, GenIndexAccess, GeneratedRepeat, GeneratedFor, GeneratedWhile, GenBreakContinue, GenExpressionStatement, GenStatementExpression, GeneratedSwitch } from "./generator";
 import { TextRange, Token, TokenType } from "./tokenizer";
 import { Parser } from "./parser";
 import { Constructor, CtorParameter, Field, Method, Parameter, TypeToken, Value } from "./oop";
@@ -6,6 +6,7 @@ import { Processor } from "./processor";
 import { AssignmentOperator, BinaryOperator, getActualOpReturnType, Modifier, UnaryOperator } from "./operators";
 import { BuiltinTypes, DummySplashType, SplashArray, SplashBoolean, SplashClass, SplashClassType, SplashComboType, SplashFloat, SplashFunctionType, SplashInt, SplashOptionalType, SplashParameterizedType, SplashString, SplashType, TypeParameter } from "./types";
 import { CompletionType, TextLocation } from "./env";
+import { Runtime } from "./runtime";
 
 
 export abstract class ASTNode {
@@ -127,29 +128,9 @@ export class VarDeclaration extends Statement {
     process(proc: Processor): void {
         let type = this.init ? this.init.getResultType(proc) : SplashClass.object
         proc.declareVariable(this.name, type)
-        proc.addInfo({range: this.name.range, detail: 'var ' + this.name.value + ': ' + type.toString(), declaration: proc.location(this.name.range)})
-    }
-
-    
-}
-
-export class IfStatement extends Statement {
-    
-    constructor(label: TextRange, public expr: Expression, public then: Statement, public orElse?: ElseStatement) {
-        super("if",label)
-    }
-
-    process(proc: Processor): void {
-        this.expr.getResultType(proc)
-        proc.push()
-        this.then.process(proc)
-        proc.pop()
-        this.orElse?.process(proc)
-    }
-    generate(): GeneratedStatement {
-        return new GenIfStatement(this.expr.generate(),this.then.generate(),this.orElse?.generate())
     }
 }
+
 
 export class ElseStatement extends Statement {
     
@@ -176,6 +157,71 @@ export abstract class Expression extends ASTNode {
     abstract getResultType(proc: Processor): SplashType
 
     abstract generate(): GeneratedExpression
+}
+
+export class ExpressionStatement extends Statement {
+    
+    
+    constructor(public expr: Expression) {
+        super(expr.id,expr.range)
+    }
+
+    process(proc: Processor): void {
+        this.expr.getResultType(proc)
+    }
+    generate(): GeneratedStatement {
+        return new GenExpressionStatement(this.expr.generate())
+    }
+
+}
+
+export class StatementExpression extends Expression {
+
+    
+    constructor(public statement: Statement) {
+        super(statement.id,statement.label)
+    }
+
+    getResultType(proc: Processor): SplashType {
+        this.statement.process(proc)
+        return DummySplashType.void
+    }
+    generate(): GeneratedExpression {
+        return new GenStatementExpression(this.statement.generate())
+    }
+
+}
+
+
+export class IfStatement extends Expression {
+    
+    
+    constructor(label: TextRange, public expr: Expression, public then: Expression, public orElse?: Expression) {
+        super("if",label)
+    }
+
+    getResultType(proc: Processor): SplashType {
+        this.expr.getResultType(proc)
+        proc.push()
+        let ret = this.then.getResultType(proc)
+        proc.pop()
+        proc.push()
+        let elseRet = this.orElse?.getResultType(proc) || DummySplashType.null
+        proc.pop()
+
+        if (ret instanceof DummySplashType && elseRet instanceof DummySplashType) {
+            return DummySplashType.void
+        }
+
+        if (!elseRet.canAssignTo(ret)) {
+            proc.error(this.range,'If expression result cannot be both ' + ret + ' and ' + elseRet)
+        }
+        return ret
+    }
+
+    generate(): GeneratedExpression {
+        return new GenIfStatement(this.expr.generate(),this.then.generate(),this.orElse?.generate())
+    }
 }
 
 export class ExpressionList {
@@ -321,6 +367,8 @@ export class StringExpression extends Expression {
 }
 
 export class InvalidExpression extends Expression {
+
+    static instance = new InvalidExpression()
     
     constructor() {
         super('invalid_expression', TextRange.end)
@@ -408,12 +456,12 @@ export class FieldAccess extends AssignableExpression {
         proc.suggest(this.field.range, ()=>parentType.members.map(m=>({value: m.name, detail: m.type.toString(), desc: m.docs, type: m instanceof Method ? CompletionType.method : CompletionType.field})))
         let m = parentType.getMembers(this.field.value)
         if (m.length == 1) {
-            proc.addInfo({range: this.field.range, detail: m[0].toString(), desc: m[0].docs, declaration: m[0].decl})
+            proc.addInfo({range: this.field.range, detail: parentType + ': ' + m[0].toString(), desc: m[0].docs, declaration: m[0].decl})
             return m[0].type.resolve(parentType)
         }
         if (m.length > 0) {
             for (let f of m) {
-                proc.addInfo({range: this.field.range, detail: f.toString(), desc: f.docs, declaration: f.decl})
+                proc.addInfo({range: this.field.range, detail: parentType + ': ' + f.toString(), desc: f.docs, declaration: f.decl})
             }
             return new SplashComboType(m.map(m=>m.type.resolve(parentType)))
         }
@@ -1209,5 +1257,176 @@ export class BreakContinueStatement extends Statement {
         } else {
             return GenBreakContinue.continue
         }
+    }
+}
+
+
+export class SwitchStatement extends Expression {
+
+    constructor(label: TextRange, public expr: Expression, public cases: SwitchCase[], public defaultCase?: Expression) {
+        super('switch',label)
+    }
+
+    getResultType(proc: Processor): SplashType {
+        let valType = this.expr.getResultType(proc)
+
+        let retType: SplashType | undefined
+
+        for (let c of this.cases) {
+            let ret = c.process(proc,valType)
+            if (!retType) {
+                retType = ret
+            } else if (!ret.canAssignTo(retType)) {
+                proc.error(c.label, 'Return types of switch mismatched: ' + retType + ' and ' + ret)
+            }
+        }
+
+        if (this.defaultCase && retType) {
+            let ret = this.defaultCase.getResultType(proc)
+            if (!ret.canAssignTo(retType)) {
+                proc.error(this.defaultCase.range, 'Return types of switch mismatched: ' + retType + ' and ' + ret)
+            }
+        }
+
+        return retType || DummySplashType.void
+    }
+    generate(): GeneratedExpression {
+        return new GeneratedSwitch(this.expr.generate(),this.cases,this.defaultCase?.generate())
+    }
+    
+}
+
+export class SwitchCase extends ASTNode {
+    constructor(public label: TextRange, public constraints: CaseConstraint[], public expr: Expression) {
+        super('case')
+    }
+
+    process(proc: Processor, valType: SplashType): SplashType {
+        proc.push()
+        for (let c of this.constraints) {
+            c.validate(proc, valType)
+        }
+
+        let res = this.expr.getResultType(proc)
+        proc.pop()
+        return res
+    }
+}
+
+export interface CaseConstraint {
+    validate(proc: Processor, valType: SplashType, inArray?: boolean): void
+
+    match(r: Runtime, value: Value): boolean
+}
+
+export class LiteralCaseConstraint implements CaseConstraint {
+    constructor(public expr: Expression) {
+
+    }
+    match(r: Runtime, value: Value): boolean {
+        return value.isEqual(r,this.expr.generate().evaluate(r))
+    }
+    validate(proc: Processor, valType: SplashType): void {
+        let exprType = this.expr.getResultType(proc)
+
+        if (!exprType.canAssignTo(valType)) {
+            proc.error(this.expr.range,"Expression of type " + exprType + " cannot be matched against " + valType)
+        }
+    }
+}
+
+export class VariableCaseConstraint implements CaseConstraint {
+    constructor(public name: Token, public restOfArr: boolean) {
+
+    }
+    match(r: Runtime, value: Value): boolean {
+        r.setVariable(this.name.value, value)
+        return true
+    }
+    validate(proc: Processor, valType: SplashType, inArray: boolean): void {
+        if (!inArray && this.restOfArr) {
+            proc.error(this.name.range, "Rest of array constraint is not allowed here")
+        }
+        if (inArray && this.restOfArr) {
+            proc.declareVariable(this.name, SplashArray.of(valType))
+        } else {
+            proc.declareVariable(this.name,valType)
+        }
+    }
+}
+
+export class ArrayCaseConstraint implements CaseConstraint {
+    constructor(public range: TextRange, public children: CaseConstraint[]) {
+
+    }
+    match(r: Runtime, value: Value): boolean {
+        let arr: Value[] = value.inner
+        if (this.children.length > arr.length) {
+            let last = this.children[this.children.length-1] 
+            if (!(last instanceof VariableCaseConstraint && last.restOfArr)) {
+                return false
+            }
+        }
+        return this.children.every((c,i)=>{
+            if (i == this.children.length - 1) {
+                if (c instanceof VariableCaseConstraint && c.restOfArr) {
+                    return c.match(r, new Value(value.type,arr.slice(i)))
+                } else if (i < arr.length - 1) {
+                    return false
+                }
+            }
+            return c.match(r, arr[i])
+        })
+    }
+    validate(proc: Processor, valType: SplashType): void {
+        if (valType instanceof SplashParameterizedType && valType.base instanceof SplashArray) {
+            let itemType = valType.params[0]
+            
+            for (let c of this.children) {
+                c.validate(proc, itemType, true)
+            }
+        } else {
+            proc.error(this.range,"Array constraint cannot be matched against non-array value")
+        }
+    }
+}
+
+export class OrCaseConstraint implements CaseConstraint {
+    constructor(public options: CaseConstraint[]) {
+
+    }
+    match(r: Runtime, value: Value): boolean {
+        return this.options.some(o=>o.match(r,value))
+    }
+    validate(proc: Processor, valType: SplashType): void {
+        for (let o of this.options) {
+            o.validate(proc, valType)
+        }
+    }
+}
+
+export class LabeledCaseConstraint implements CaseConstraint {
+    constructor(public constraint: CaseConstraint, public label: Token) {
+
+    }
+    match(r: Runtime, value: Value): boolean {
+        let matched = this.constraint.match(r,value)
+        if (matched) {
+            r.setVariable(this.label.value,value)
+        }
+        return matched
+    }
+    validate(proc: Processor, valType: SplashType): void {
+        this.constraint.validate(proc,valType)
+    }
+}
+
+export class InvalidCaseConstraint implements CaseConstraint {
+    static instance = new InvalidCaseConstraint()
+    validate(proc: Processor, valType: SplashType, inArray?: boolean): void {
+        
+    }
+    match(r: Runtime, value: Value): boolean {
+        return false
     }
 }

@@ -84,6 +84,7 @@ export class Processor {
     }
 
     declareVariable(name: Token, type: SplashType) {
+        this.addInfo({range: name.range, detail: 'var ' + name.value + ': ' + type.toString(), declaration: this.location(name.range)})
         if (this.getVariable(name.value)) {
             this.error(name.range, "Duplicate variable " + name.value + "!")
         } else {
@@ -192,8 +193,12 @@ export class Processor {
     getVariable(name: string) {
         for (let i = this.variables.length - 1; i >= 0; i--) {
             let frame = this.variables[i]
+            console.log(frame)
             if (frame[name]) {
-                return frame[name]
+                let ret = frame[name]
+                if (ret instanceof Variable) {
+                    return ret
+                }
             }
         }
     }

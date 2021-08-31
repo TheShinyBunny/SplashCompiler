@@ -154,7 +154,7 @@ const symbols = ['~','`',';','!','@','#','$','%','^','&','*','(',')','-','+','='
 
 const multiCharOperators = ['++','--','&&','||','**','//','<=','>=','==','!=','..','...','+=','-=','*=','/=','%=','**=','//='];
 
-const keywords = ['main','function','if','this','var','const','as','is','in','while','for','switch','repeat','class','return','constructor','private','protected','abstract','native','final','static','readonly','operator','iterator','get','set','indexer','accessor','assigner','invoker','bidir','true','false','null','void','break','continue']
+const keywords = ['main','function','if','this','var','const','while','for','switch','repeat','class','return','constructor','private','protected','abstract','native','final','static','readonly','operator','iterator','get','set','indexer','accessor','assigner','invoker','bidir','true','false','null','void','break','continue']
 
 const escapableChars: {[key: string]: string} = {
     '\\': '\\',

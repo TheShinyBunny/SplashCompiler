@@ -416,6 +416,10 @@ export class Value {
         return this.invokeMethod(runtime, 'toBoolean').inner
     }
 
+    isEqual(runtime: Runtime, val: Value) {
+        return this.invokeBinOperator(runtime,BinaryOperator.equals,val).toBoolean(runtime)
+    }
+
     get isNull() {
         return this.type == DummySplashType.null || this.inner == null
     }

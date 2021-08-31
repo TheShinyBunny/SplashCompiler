@@ -1,10 +1,45 @@
 
 main {
-  var x = 20
 
-  while (x > 0) {
-    if (x < 10) break
+  var x = 5
 
-    x -= 1
+  if (x > 0) {
+    print("TRUE AND NOT FALSE")
+  } else {}
+
+  var positivity = if (x > 0) "positive" else "negative"
+
+  print("{x} is {positivity}")
+
+  switch (x) {
+    case 8 {
+      print("It's eight!")
+    }
+    case 2, 3, 5, 7 {
+      print("It's prime!")
+    }
+    case def {
+      print("It's something else: {def}")
+    }
+  }
+
+  var list = ["yaniv","genius"]
+
+  switch (list) {
+    case ["hello", name] {
+      print("Hello, {name}!")
+    }
+    case ["bye", name] {
+      print("Good bye, {name}!")
+    }
+    case ["thank" || "saythanks", *all] {
+      print("Thank you to {all.join(', ')}")
+    }
+    case [someone, "genius"] {
+      print("{someone}, you're a genius!")
+    }
+    default {
+      print("Invalid command!")
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { Diagnostic, DiagnosticType } from ".";
-import { ElseStatement, NullExpression, ArrayExpression, AssignableExpression, Assignment, BinaryExpression, CallAccess, CallStatement, CodeBlock, Expression, FieldAccess, IfStatement, InvalidExpression, LiteralExpression, MainBlock, RootNode, Statement, UnaryExpression, VarDeclaration, VariableAccess, ModifierList, ParameterNode, FunctionNode, ReturnStatement, ExpressionList, StringExpression, ClassDeclaration, ClassMember, MethodNode, FieldNode, ConstructorParamNode, ConstructorNode, ThisAccess, ASTNode, IndexAccess, TypeParameterNode, RepeatStatement, ForStatement, WhileStatement, BreakContinueStatement } from "./ast";
+import { ElseStatement, NullExpression, ArrayExpression, AssignableExpression, Assignment, BinaryExpression, CallAccess, CallStatement, CodeBlock, Expression, FieldAccess, IfStatement, InvalidExpression, LiteralExpression, MainBlock, RootNode, Statement, UnaryExpression, VarDeclaration, VariableAccess, ModifierList, ParameterNode, FunctionNode, ReturnStatement, ExpressionList, StringExpression, ClassDeclaration, ClassMember, MethodNode, FieldNode, ConstructorParamNode, ConstructorNode, ThisAccess, ASTNode, IndexAccess, TypeParameterNode, RepeatStatement, ForStatement, WhileStatement, BreakContinueStatement, StatementExpression, ExpressionStatement, SwitchCase, SwitchStatement, CaseConstraint, VariableCaseConstraint, ArrayCaseConstraint, LiteralCaseConstraint, InvalidCaseConstraint, OrCaseConstraint } from "./ast";
 import { Completion, CompletionType, PartialCompletion, TextLocation } from "./env";
 import { BasicTypeToken, ComboTypeToken, FunctionTypeToken, SingleTypeToken, TypeToken } from "./oop";
 import { AssignmentOperator, BinaryOperator, Modifier } from "./operators";
@@ -393,7 +393,8 @@ export class Parser {
         if (this.isValueNext('var')) {
             return this.parseVarDecl()
         } else if (this.isValueNext('if')) {
-            return this.parseIf()
+            let stm = this.parseIf()
+            if (stm) return new ExpressionStatement(stm)
         } else if (this.isValueNext('{')) {
             return this.parseBlock()
         } else if (this.isValueNext('return')) {
@@ -421,9 +422,25 @@ export class Parser {
             return this.parseFor()
         } else if (this.isValueNext('while')) {
             return this.parseWhile()
+        } else if (this.isValueNext('switch')) {
+            let sw = this.parseSwitch()
+            if (sw) return new ExpressionStatement(sw)
         } else {
             return this.parseVarAccess()
         }
+    }
+
+    parseStatementAsExpression() {
+        let expr = this.parseExpression()
+        if (expr instanceof InvalidExpression) {
+            let stm = this.parseStatement()
+            if (stm instanceof ExpressionStatement) {
+                return stm.expr
+            } else if (stm) {
+                return new StatementExpression(stm)
+            }
+        }
+        return expr
     }
 
     parseIf(): IfStatement | undefined {
@@ -432,27 +449,21 @@ export class Parser {
             let expr = this.parseExpression()
             this.expectValue(')')
             this.skipEmptyLines()
-            let then = this.parseStatement()
-            if (then) {
-                let orElse: ElseStatement | undefined
+            let then = this.parseStatementAsExpression()
+            let orElse: Expression | undefined
+            this.skipEmptyLines()
+            this.suggestHere(CompletionType.keyword,'else')
+            if (this.isValueNext('else')) {
+                this.next()
                 this.skipEmptyLines()
-                this.suggestHere(CompletionType.keyword,'else')
-                if (this.isValueNext('else')) {
-                    let l = this.next()
-                    this.skipEmptyLines()
-                    let statement = this.parseStatement()
-                    if (statement) {
-                        orElse = new ElseStatement(l.range, statement)
-                    } else {
-                        this.error(this.peek(),"Expected else statement")
-                    }
-                } else {
-                    this.goBack()
+                orElse = this.parseStatementAsExpression()
+                if (!orElse) {
+                    this.error(this.peek(),"Expected else statement")
                 }
-                return new IfStatement(label.range, expr, then, orElse)
             } else {
-                this.error(this.peek(),"Expected if statement")
+                this.goBack()
             }
+            return new IfStatement(label.range, expr, then, orElse)
         }
     }
 
@@ -512,6 +523,55 @@ export class Parser {
         }
     }
 
+    parseSwitch(): SwitchStatement | undefined {
+        let label = this.next()
+        if (this.expectValue('(')) {
+            let expr = this.parseExpression()
+            this.expectValue(')')
+
+            this.expectValue('{')
+
+            let cases: SwitchCase[] = []
+            let defCase: Expression | undefined
+            while (this.hasNext()) {
+                if (this.isNext(TokenType.line_end)) {
+                    this.next()
+                    continue
+                } else if (this.isValueNext('}')) {
+                    break
+                }
+
+                this.suggestHere(CompletionType.keyword, 'case', 'default')
+                
+                if (this.isValueNext('case')) {
+                    let c = this.parseSwitchCase()
+                    cases.push(c)
+                    if (this.hasNext()) {
+                        this.expect(TokenType.line_end)
+                    }
+                } else if (this.isValueNext('default')) {
+                    let lbl = this.next()
+                    let exp = this.parseStatementAsExpression()
+                    if (defCase) {
+                        this.error(lbl, 'Cannot have multiple default cases in a switch')
+                    } else {
+                        defCase = exp
+                    }
+                } else {
+                    let range = this.startRange()
+                    while (this.hasNext() && !this.isNext(TokenType.line_end)) {
+                        this.next()
+                    }
+                    this.errorRange(range.end(),'Invalid statement')
+                }
+            }
+
+            this.expectValue('}')
+
+            return new SwitchStatement(label.range, expr, cases, defCase)
+        }
+    }
+
     parseFunction(modifiers: ModifierList): FunctionNode | undefined {
         modifiers.assertHasOnly(this,Modifier.private,Modifier.native)
         this.next()
@@ -545,8 +605,8 @@ export class Parser {
 
     parseList<T>(parser: ()=>T | undefined, open: string, close: string): T[] {
         let values: T[] = []
-        if (this.expectValue(open)) {
-            while (this.hasNext() && !this.isValueNext(close)) {
+        if (open == '' || this.expectValue(open)) {
+            while (this.hasNext() && (close == '' || !this.isValueNext(close))) {
                 let p = parser.apply(this)
                 if (p) {
                     values.push(p)
@@ -555,7 +615,9 @@ export class Parser {
                     break
                 }
             }
-            this.expectValue(close)
+            if (close != '') {
+                this.expectValue(close)
+            }
         }
         return values
     }
@@ -688,6 +750,12 @@ export class Parser {
     parseVarAccess(): Statement | undefined {
         let v = this.parsePrimaryExpression()
         if (v instanceof AssignableExpression) {
+            if (this.skipValue('++')) {
+                return new Assignment(v,Token.dummy('+='),new LiteralExpression(Token.dummy("1")))
+            }
+            if (this.skipValue('--')) {
+                return new Assignment(v,Token.dummy('-='),new LiteralExpression(Token.dummy("1")))
+            }
             let assignOp = this.expectOneOf('assignment operator',...Object.values(AssignmentOperator))
             let value = this.parseExpression()
             return new Assignment(v, assignOp, value)
@@ -786,17 +854,23 @@ export class Parser {
     }
 
     parseIsInExpression(): Expression {
-        let expr = this.parseUnaryExpression()
+        let expr = this.parseRangeExpression()
         while (this.isValueNext('as','in','~')) {
+            expr = new BinaryExpression(expr,this.next(),this.parseRangeExpression());
+        }
+        return expr
+    }
+
+    parseRangeExpression(): Expression {
+        let expr = this.parseUnaryExpression()
+        while (this.isValueNext('..')) {
             expr = new BinaryExpression(expr,this.next(),this.parseUnaryExpression());
         }
         return expr
     }
 
-    
-
     parseUnaryExpression(): Expression {
-        if (this.isValueNext('+','-','!','..')) {
+        if (this.isValueNext('+','-','!')) {
             return new UnaryExpression(this.next(),this.parsePrimaryExpression());
         }
         return this.parsePrimaryExpression()
@@ -828,14 +902,73 @@ export class Parser {
             expr = new ThisAccess(this.next())
         } else if (this.isValueNext('null')) {
             expr = new NullExpression(this.next())
+        } else if (this.isValueNext('if')) {
+            return this.parseIf() || InvalidExpression.instance
+        } else if (this.isValueNext('switch')) {
+            return this.parseSwitch() || InvalidExpression.instance
         } else {
-            return new InvalidExpression()
+            return InvalidExpression.instance
         }
         return this.parseAccessChain(expr)
         /* todo: add other types of expression
         json object
         */
     }
+
+    parseSwitchCase(): SwitchCase {
+        let label = this.next()
+        let constraints = this.parseList(this.parseCaseExpr,'','')
+        let then = this.parseStatementAsExpression()
+        return new SwitchCase(label.range,constraints,then)
+    }
+
+    parseCaseExpr(): CaseConstraint {
+        let con = this.parseSingleCaseExpr()
+        let orList = [con]
+        while (this.isValueNext('||')) {
+            this.next()
+            let other = this.parseSingleCaseExpr()
+            orList.push(other)
+        }
+
+        return orList.length == 1 ? con : new OrCaseConstraint(orList)
+    }
+
+    parseSingleCaseExpr(): CaseConstraint {
+        // todo: consider adding the labeled case, which is kinda useless
+        if (this.skipValue('*')) {
+            let name = this.expect(TokenType.identifier);
+            if (name) { 
+                return new VariableCaseConstraint(name,true)
+            }
+            return InvalidCaseConstraint.instance
+        }
+        if (this.isNext(TokenType.identifier)) {
+            return new VariableCaseConstraint(this.next(),false)
+        }
+        if (this.isValueNext('[')) {
+            let range = this.startRange()
+            let list = this.parseList(this.parseCaseExpr,'[',']')
+            return new ArrayCaseConstraint(range.end(),list)
+        }
+        if (this.isNext(TokenType.int) || this.isNext(TokenType.float) || this.isValueNext('true','false')) {
+            let expr = new LiteralExpression(this.next())
+            return new LiteralCaseConstraint(expr)
+        } else if (this.isNext(TokenType.string)) {
+            let tok = this.next() as StringToken
+            let expr = new StringExpression(tok.range,tok.segments.map(s=>{
+                if (s instanceof ExpressionSegment) {
+                    return new Parser(this.file,new DelegateTokenizer(s.tokens)).parseExpression()
+                } else {
+                    return new LiteralExpression(new Token(TokenType.string,s.toString(),TextRange.end))
+                }
+            }))
+            return new LiteralCaseConstraint(expr)
+        }
+        this.error(this.peek(),'Invalid case constraint')
+        return InvalidCaseConstraint.instance
+    }
+
 
 }
 

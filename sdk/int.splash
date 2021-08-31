@@ -25,6 +25,15 @@ native class int {
         return this - other
     }
 
+    operator IntRange range(int to) {
+        if (this < to) return IntRange(this,to)
+        return IntRange(to,this)
+    }
+
+    operator boolean in(IntRange range) {
+        return range.contains(this)
+    }
+
     native operator int negative()
 
     boolean isOdd() {

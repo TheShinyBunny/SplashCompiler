@@ -1,4 +1,4 @@
-import { Expression } from "./ast";
+import { Expression, SwitchCase } from "./ast";
 import { NativeFunctions } from "./native";
 import { Parameter, Value } from "./oop";
 import { AssignmentOperator, BinaryOperator, UnaryOperator } from "./operators";
@@ -32,10 +32,8 @@ export class GeneratedBlock extends GeneratedStatement {
                 s.run(runtime)
             }
         } catch (e) {
-            if (e instanceof Returned || e instanceof Break || e instanceof Continue) {
+            if (e instanceof Returned || e instanceof Break || e instanceof Continue || e instanceof SplashRuntimeError) {
                 throw e
-            } else if (e instanceof SplashRuntimeError) {
-                console.log("Runtime Error:",e.message)
             } else {
                 console.log("Unexpected",e)
             }
@@ -60,7 +58,15 @@ export class SplashScript {
         runtime.include(this)
         if (this.main) {
             console.info("Executing script " + this.name)
-            this.main.run(runtime)
+            try {
+                this.main.run(runtime)
+            } catch (e) {
+                if (e instanceof SplashRuntimeError) {
+                    console.log('Runtime Error:',e.message)
+                } else {
+                    console.log('Unexpected:',e)
+                }
+            }
         }
     }
 
@@ -103,6 +109,8 @@ export class SplashFunction {
             } catch (e) {
                 if (e instanceof Returned) {
                     return e.value
+                } else {
+                    throw e
                 }
             }
             
@@ -114,24 +122,54 @@ export class SplashFunction {
 
 }
 
-export class GenIfStatement extends GeneratedStatement {
-    constructor(public expr: GeneratedExpression, public then: GeneratedStatement, public orElse?: GeneratedStatement) {
-        super()
-    }
-    run(runtime: Runtime): void {
-        let res = this.expr.evaluate(runtime)
-        if (res.toBoolean(runtime)) {
-            this.then.run(runtime)
-        } else {
-            this.orElse?.run(runtime)
-        }
-    }
-    
-}
 
 export abstract class GeneratedExpression extends Generated {
 
     abstract evaluate(runtime: Runtime): Value
+}
+
+export class GenStatementExpression extends GeneratedExpression {
+    
+
+    constructor(public statement: GeneratedStatement) {
+        super()
+    }
+
+    evaluate(runtime: Runtime): Value {
+        this.statement.run(runtime)
+        return Value.void
+    }
+    
+}
+
+export class GenExpressionStatement extends GeneratedStatement {
+    
+
+    constructor(public expr: GeneratedExpression) {
+        super()
+    }
+
+    run(runtime: Runtime): void {
+        this.expr.evaluate(runtime)
+    }
+    
+}
+
+
+
+export class GenIfStatement extends GeneratedExpression {
+    constructor(public expr: GeneratedExpression, public then: GeneratedExpression, public orElse?: GeneratedExpression) {
+        super()
+    }
+    evaluate(runtime: Runtime): Value {
+        let res = this.expr.evaluate(runtime)
+        if (res.toBoolean(runtime)) {
+            return this.then.evaluate(runtime)
+        } else {
+            return this.orElse?.evaluate(runtime) || Value.null
+        }
+    }
+    
 }
 
 export abstract class GenAssignableExpression extends GeneratedExpression {
@@ -471,4 +509,28 @@ export class GenBreakContinue extends GeneratedStatement {
         }
     }
     
+}
+
+
+export class GeneratedSwitch extends GeneratedExpression {
+    constructor(public expr: GeneratedExpression, public cases: SwitchCase[], public defaultCase?: GeneratedExpression) {
+        super()
+    }
+    evaluate(runtime: Runtime): Value {
+        let val = this.expr.evaluate(runtime)
+
+        for (let c of this.cases) {
+            let matched = false
+            for (let con of c.constraints) {
+                if (con.match(runtime, val)) {
+                    matched = true
+                }
+            }
+            if (matched) {
+                return c.expr.generate().evaluate(runtime)
+            }
+        }
+
+        return this.defaultCase?.evaluate(runtime) || Value.null
+    }
 }

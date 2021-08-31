@@ -6,6 +6,8 @@ native class string {
 
     native string[] chars()
 
+    native operator int compare(string other)
+
     native operator string sub(int chars)
 
     get indexer string(int index) {
