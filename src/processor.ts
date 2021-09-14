@@ -193,7 +193,6 @@ export class Processor {
     getVariable(name: string) {
         for (let i = this.variables.length - 1; i >= 0; i--) {
             let frame = this.variables[i]
-            console.log(frame)
             if (frame[name]) {
                 let ret = frame[name]
                 if (ret instanceof Variable) {

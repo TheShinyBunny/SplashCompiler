@@ -59,6 +59,7 @@ export function compileFile(file: string, sdk: SplashModule): SplashScript | und
             proc.import(sdk)
         }
         root.index(proc)
+        root.indexChildren(proc)
         let script = processAndGenerate(proc,root)
         return script
     }

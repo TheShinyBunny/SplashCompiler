@@ -1,11 +1,10 @@
 
 main {
 
-  var x = 5
+  var p1 = Person("Shlomo")
+  var p2 = Soldier(123, "Yaniv")
 
-  if (x > 0) {
-    print("TRUE AND NOT FALSE")
-  } else {}
+  var x = 5
 
   var positivity = if (x > 0) "positive" else "negative"
 
@@ -42,4 +41,17 @@ main {
       print("Invalid command!")
     }
   }
+}
+
+class Person {
+  string name
+  int age
+
+  constructor(this.name, this.age = 19)
+}
+
+class Soldier extends Person {
+  int personalNum
+
+  constructor(this.personalNum, this.name)
 }

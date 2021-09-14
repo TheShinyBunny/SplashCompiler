@@ -271,13 +271,18 @@ export class DummySplashType extends SplashType {
 
 export class SplashClass extends SplashType {
     static object = new SplashClass('object')
+    extend?: SplashType
 
     constructor(name: string) {
         super(name)
     }
 
+    get super(): SplashType {
+        return this.extend || SplashClass.object
+    }
+
     get constructors(): Constructor[] {
-        return this.members.filter(m=>m instanceof Constructor).map(m=>m as Constructor)
+        return this._members.filter(m=>m instanceof Constructor).map(m=>m as Constructor)
     }
 
     getValidCtor(params: Value[]) {
@@ -298,7 +303,6 @@ export class SplashParameterizedType extends SplashType {
 
     canAssignTo(type: SplashType) {
         if (type instanceof SplashParameterizedType) {
-            console.log(this.base,type)
             let base = this.base.canAssignTo(type)
             let sl = this.params.length == type.params.length 
             let pm = false
@@ -390,6 +394,12 @@ export class SplashClassType extends SplashClass {
     get members() {
         return this.type.members.filter(m=>m.isStatic)
     }
+
+    get constructors() {
+        return this.type instanceof SplashClass ? this.type.constructors : []
+    }
+
+
 }
 
 export class SplashBoolean extends SplashPrimitive {

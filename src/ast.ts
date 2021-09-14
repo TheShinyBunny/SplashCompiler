@@ -947,7 +947,7 @@ export class ClassDeclaration extends ASTNode {
 
     type?: SplashType
 
-    constructor(public name: Token, public typeParams: TypeParameterNode[], public body: ClassMember[], public modifiers: ModifierList) {
+    constructor(public name: Token, public typeParams: TypeParameterNode[], public body: ClassMember[], public modifiers: ModifierList, public extend?: TypeToken) {
         super('class_decl')
     }
 
@@ -959,11 +959,18 @@ export class ClassDeclaration extends ASTNode {
         }
         this.type.declaration = proc.location(this.name.range)
         proc.types.push(this.type)
-        
     }
 
     indexChildren(proc: Processor) {
         if (this.type) {
+            if (this.extend && this.type instanceof SplashClass) {
+                proc.validateType(this.extend)
+                let ext = proc.resolveType(this.extend)
+                if (!(ext instanceof SplashClass) && !(ext instanceof SplashParameterizedType)) {
+                    proc.error(this.extend.range, "Invalid super class")
+                }
+                this.type.extend = ext
+            }
             proc.currentClass = this.type
             for (let m of this.body) {
                 m.index(proc, this.type)

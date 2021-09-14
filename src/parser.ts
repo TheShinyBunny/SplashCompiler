@@ -598,8 +598,13 @@ export class Parser {
             if (this.isValueNext('<')) {
                 typeParams = this.parseList(this.parseTypeParam,'<','>')
             }
+            this.suggestHere(CompletionType.keyword, 'extends')
+            let extend: TypeToken | undefined
+            if (this.skipValue('extends')) {
+                extend = this.parseTypeToken(false)
+            }
             let body = this.parseClassBody()
-            return new ClassDeclaration(name,typeParams,body,modifiers)
+            return new ClassDeclaration(name,typeParams,body,modifiers,extend)
         }
     }
 
