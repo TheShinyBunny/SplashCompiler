@@ -10,7 +10,7 @@ export const sdk = compileModule(path.resolve(__dirname,'../sdk'))
 
 const file = './test.splash'
 
-if (sdk.valid) {
+/* if (sdk.valid) {
     let compiled = compileFile(file,sdk)
 
     if (compiled) {
@@ -22,7 +22,7 @@ if (sdk.valid) {
         compiled.run(rt)
         console.timeEnd('execution done')
     }
-}
+} */
 
 
 export {

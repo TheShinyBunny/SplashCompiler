@@ -363,10 +363,6 @@ export class NativeMethods {
     }
 
     // OBJECT
-    @NativeMethod('this',['this def'],[Modifier.operator])
-    object_default(r: Runtime, val: Value, other: Value) {
-        return val.isNull ? other : val
-    }
 
     @NativeMethod('string')
     object_toString(r: Runtime, val: Value) {

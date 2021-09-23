@@ -283,10 +283,31 @@ export class BinaryExpression extends Expression {
     getResultType(proc: Processor): SplashType {
         let leftType = this.left.getResultType(proc)
         let rightType = this.right.getResultType(proc)
+        if (this.op.value == '~') {
+            if (!rightType.canAssignTo(leftType)) {
+                proc.error(this.op.range, "Value of type " + rightType + " cannot be used as default for " + leftType)
+            }
+            return leftType
+        }
+        if (this.op.value == 'as') {
+            if (!(rightType instanceof SplashClassType)) {
+                proc.error(this.right.range, "Expression must be a class type")
+                return leftType
+            } else if (!leftType.canEitherAssignTo(rightType.type)) {
+                proc.error(this.op.range, "Value of type " + leftType + " cannot be cast to " + rightType.type)
+            }
+            return rightType.type
+        }
+        if (this.op.value == 'is') {
+            if (!(rightType instanceof SplashClassType)) {
+                proc.error(this.right.range, "Expression must be a class type")
+            }
+            return SplashBoolean.instance
+        }
         let binop = leftType.getBinaryOperation(this.op.value as BinaryOperator, rightType)
-        if (!binop) {
+        if (!binop || this.op.value == 'in') {
             let bidir = rightType.getBinaryOperation(this.op.value as BinaryOperator, leftType)
-            if (bidir?.modifiers.has(Modifier.bidir)) {
+            if (bidir?.modifiers.has(Modifier.bidir) || this.op.value == 'in') {
                 binop = bidir
             }
         }
@@ -1288,9 +1309,9 @@ export class SwitchStatement extends Expression {
             }
         }
 
-        if (this.defaultCase && retType) {
+        if (this.defaultCase) {
             let ret = this.defaultCase.getResultType(proc)
-            if (!ret.canAssignTo(retType)) {
+            if (retType && !ret.canAssignTo(retType)) {
                 proc.error(this.defaultCase.range, 'Return types of switch mismatched: ' + retType + ' and ' + ret)
             }
         }

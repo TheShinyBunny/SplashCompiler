@@ -2,7 +2,7 @@ import { Expression, SwitchCase } from "./ast";
 import { NativeFunctions } from "./native";
 import { Parameter, Value } from "./oop";
 import { AssignmentOperator, BinaryOperator, UnaryOperator } from "./operators";
-import { SplashArray, SplashBoolean, SplashClass, SplashComboType, SplashFloat, SplashFunctionType, SplashInt, SplashOptionalType, SplashString, SplashType } from "./types";
+import { SplashArray, SplashBoolean, SplashClass, SplashClassType, SplashComboType, SplashFloat, SplashFunctionType, SplashInt, SplashOptionalType, SplashString, SplashType } from "./types";
 import { Break, Continue, Returned, Runtime, SplashRuntimeError } from "./runtime";
 import { TokenType } from "./tokenizer";
 import { TextLocation } from "./env";
@@ -193,6 +193,25 @@ export class GeneratedBinary extends GeneratedExpression {
     }
 
     evaluate(runtime: Runtime): Value {
+        if (this.op == BinaryOperator.default) {
+            let left = this.left.evaluate(runtime)
+            if (left.isNull) {
+                return this.right.evaluate(runtime)
+            }
+            return left
+        }
+        if (this.op == BinaryOperator.as) {
+            this.right.evaluate(runtime)
+            return this.left.evaluate(runtime)
+        }
+        if (this.op == BinaryOperator.is) {
+            let val = this.left.evaluate(runtime)
+            let type = this.right.evaluate(runtime)
+            if (type.type instanceof SplashClassType) {
+                return new Value(SplashBoolean.instance,val.type.canAssignTo(type.type.type))
+            }
+            return new Value(SplashBoolean.instance,false)
+        }
         return this.left.evaluate(runtime).invokeBinOperator(runtime,this.op,this.right.evaluate(runtime))
     }
     

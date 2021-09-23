@@ -860,7 +860,7 @@ export class Parser {
 
     parseAsInExpression(): Expression {
         let expr = this.parseRangeExpression()
-        while (this.isValueNext('as','in') || (this.isValueNext('!') && (this.peek(1).value == 'as' || this.peek(1).value == 'in'))) {
+        while (this.isValueNext('as','in','is') || (this.isValueNext('!') && ['as','is','in'].indexOf(this.peek(1).value) >= 0)) {
             let negToken = this.next()
             expr = new BinaryExpression(expr,negToken.value == '!' ? this.next() : negToken,this.parseRangeExpression());
             if (negToken.value == '!') {

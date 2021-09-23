@@ -35,6 +35,9 @@ export function getOpMethodName(op: BinaryOperator) {
         case BinaryOperator.ne:
             return 'compare'
     }
+    if (op == BinaryOperator.in) {
+        return 'contains'
+    }
     return Object.entries(BinaryOperator).find(e=>e[1] == op)?.[0] || ''
 }
 

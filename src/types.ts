@@ -143,6 +143,10 @@ export abstract class SplashType {
         return false
     }
 
+    canEitherAssignTo(type: SplashType) {
+        return this.canAssignTo(type) || type.canAssignTo(this)
+    }
+
     resolve(ownerType: SplashType): SplashType {
         return this
     }
@@ -287,6 +291,12 @@ export class SplashClass extends SplashType {
 
     getValidCtor(params: Value[]) {
         return this.constructors.find(c=>Parameter.allParamsMatch(c.params,params.map(p=>p.type)))
+    }
+
+    canAssignTo(type: SplashType) {
+        if (super.canAssignTo(type)) return true
+        if (this.extend) return this.extend.canAssignTo(type)
+        return false
     }
 }
 
