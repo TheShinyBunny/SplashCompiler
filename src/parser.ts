@@ -851,24 +851,28 @@ export class Parser {
     }
 
     parsePowExpression(): Expression {
-        let expr = this.parseIsInExpression()
+        let expr = this.parseAsInExpression()
         while (this.isValueNext('**')) {
-            expr = new BinaryExpression(expr,this.next(),this.parseIsInExpression());
+            expr = new BinaryExpression(expr,this.next(),this.parseAsInExpression());
         }
         return expr
     }
 
-    parseIsInExpression(): Expression {
+    parseAsInExpression(): Expression {
         let expr = this.parseRangeExpression()
-        while (this.isValueNext('as','in','~')) {
-            expr = new BinaryExpression(expr,this.next(),this.parseRangeExpression());
+        while (this.isValueNext('as','in') || (this.isValueNext('!') && (this.peek(1).value == 'as' || this.peek(1).value == 'in'))) {
+            let negToken = this.next()
+            expr = new BinaryExpression(expr,negToken.value == '!' ? this.next() : negToken,this.parseRangeExpression());
+            if (negToken.value == '!') {
+                expr = new UnaryExpression(negToken,expr)
+            }
         }
         return expr
     }
 
     parseRangeExpression(): Expression {
         let expr = this.parseUnaryExpression()
-        while (this.isValueNext('..')) {
+        while (this.isValueNext('..','~')) {
             expr = new BinaryExpression(expr,this.next(),this.parseUnaryExpression());
         }
         return expr
